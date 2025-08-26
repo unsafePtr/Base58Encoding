@@ -12,7 +12,7 @@ public partial class Base58
         if (data.Length == 0)
             return 0;
 
-        if (data.Length <= 16)
+        if (data.Length < 16)
             return CountLeadingZerosScalar(data);
 
         int count = CountLeadingZerosSimd(data, out int processed);
