@@ -31,7 +31,6 @@ public partial class Base58
     /// </summary>
     /// <param name="data">Bytes to encode</param>
     /// <returns>Base58 encoded string</returns>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public string Encode(ReadOnlySpan<byte> data)
     {
         if (data.IsEmpty)
