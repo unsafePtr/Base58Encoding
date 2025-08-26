@@ -25,6 +25,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     
     steps:
     - uses: actions/checkout@v4
@@ -67,6 +69,8 @@ jobs:
     runs-on: ubuntu-latest
     # Only publish on version tags or manual trigger with version
     if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && github.event.inputs.version != '')
+    permissions:
+      contents: write
     
     steps:
     - name: Download artifacts
@@ -88,5 +92,3 @@ jobs:
       with:
         files: ./artifacts/*.nupkg
         generate_release_notes: true
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
