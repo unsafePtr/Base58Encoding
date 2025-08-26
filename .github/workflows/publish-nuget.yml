@@ -33,10 +33,10 @@ jobs:
         dotnet-version: 9.0.x
         
     - name: Restore dependencies
-      run: dotnet restore src/Base58Encoding/Base58Encoding.csproj
+      run: dotnet restore src/Base58Encoding.slnx
       
     - name: Build
-      run: dotnet build src/Base58Encoding/Base58Encoding.csproj --configuration Release --no-restore
+      run: dotnet build src/Base58Encoding.slnx --configuration Release --no-restore
       
     - name: Test
       run: dotnet test src/Base58Encoding.Tests/Base58Encoding.Tests.csproj --configuration Release --no-build --verbosity normal
