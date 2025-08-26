@@ -1,7 +1,7 @@
 ﻿using System.Diagnostics.CodeAnalysis;
 
 namespace Base58Encoding;
-public static class ThrowHelper
+internal static class ThrowHelper
 {
     [DoesNotReturn]
     public static void ThrowNotExactLength()
