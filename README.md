@@ -1,5 +1,8 @@
 # Base58 Encoding Library
 
+[![NuGet](https://img.shields.io/nuget/v/Base58Encoding.svg)](https://www.nuget.org/packages/Base58Encoding/)
+[![NuGet Downloads](https://img.shields.io/nuget/dt/Base58Encoding.svg)](https://www.nuget.org/packages/Base58Encoding/)
+
 A .NET 9.0 Base58 encoding and decoding library with support for multiple alphabet variants.
 
 ## Features
