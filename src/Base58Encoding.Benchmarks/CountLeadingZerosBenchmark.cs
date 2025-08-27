@@ -10,6 +10,7 @@ public class CountLeadingZerosBenchmark
         // Decode the provided base58 addresses to get byte arrays with leading zeros
         var addresses = new[]
         {
+            "1A1zP12r2r2r1wq1",
             "1111111111111111111114oLvT2",
             "1111113LrYkRba5STgvA5UoLqzLxwP6XhtN6f",
             "1BoatSLRHtKNngkdXEeobR76b53LETtpyT",
