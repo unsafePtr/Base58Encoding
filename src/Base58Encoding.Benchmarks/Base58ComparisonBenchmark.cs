@@ -11,16 +11,14 @@ namespace Base58Encoding.Benchmarks;
 public class Base58ComparisonBenchmark
 {
     private byte[] _testData = null!;
-    private string _ourBase58Encoded = null!;
-    private string _simpleBase58Encoded = null!;
+    private string _base58Encoded = null!;
 
     [Params(TestVectors.VectorType.BitcoinAddress,
         TestVectors.VectorType.SolanaAddress,
         TestVectors.VectorType.SolanaTx,
         TestVectors.VectorType.IPFSHash,
-        TestVectors.VectorType.MoneroAddress,
-        TestVectors.VectorType.FlickrTestData,
-        TestVectors.VectorType.RippleTestData)]
+        TestVectors.VectorType.MoneroAddress
+    )]
     public TestVectors.VectorType VectorType { get; set; }
 
     [GlobalSetup]
@@ -28,8 +26,7 @@ public class Base58ComparisonBenchmark
     {
         _testData = TestVectors.GetVector(VectorType);
 
-        _ourBase58Encoded = Base58.Bitcoin.Encode(_testData);
-        _simpleBase58Encoded = SimpleBase.Base58.Bitcoin.Encode(_testData);
+        _base58Encoded = Base58.Bitcoin.Encode(_testData);
     }
 
     [Benchmark(Description = "Our Base58 Encode", Baseline = true)]
@@ -41,18 +38,18 @@ public class Base58ComparisonBenchmark
     [Benchmark(Description = "SimpleBase Base58 Encode")]
     public string Encode_SimpleBase58()
     {
-        return SimpleBase.Base58.Bitcoin.Encode(_testData.AsSpan());
+        return SimpleBase.Base58.Bitcoin.Encode(_testData);
     }
 
-    [Benchmark(Description = "Our Base58 Decode", Baseline = true)]
+    [Benchmark(Description = "Our Base58 Decode")]
     public byte[] Decode_OurBase58()
     {
-        return Base58.Bitcoin.Decode(_ourBase58Encoded);
+        return Base58.Bitcoin.Decode(_base58Encoded);
     }
 
     [Benchmark(Description = "SimpleBase Base58 Decode")]
     public byte[] Decode_SimpleBase58()
     {
-        return SimpleBase.Base58.Bitcoin.Decode(_simpleBase58Encoded.AsSpan());
+        return SimpleBase.Base58.Bitcoin.Decode(_base58Encoded);
     }
 }
