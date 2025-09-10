@@ -4,15 +4,13 @@ using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
 
 namespace Base58Encoding;
+
 public partial class Base58
 {
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static int CountLeadingZeros(ReadOnlySpan<byte> data)
     {
-        if (data.Length == 0)
-            return 0;
-
-        if (data.Length < 16)
+        if (data.Length < 64)
             return CountLeadingZerosScalar(data);
 
         int count = CountLeadingZerosSimd(data, out int processed);

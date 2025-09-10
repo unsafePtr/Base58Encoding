@@ -12,6 +12,7 @@ namespace Base58Encoding.Benchmarks;
 [SimpleJob(RuntimeMoniker.Net90)]
 [SimpleJob(RuntimeMoniker.Net10_0)]
 [HideColumns("Job", "Error", "StdDev", "Median", "RatioSD")]
+[DisassemblyDiagnoser]
 public class CountLeadingZerosBenchmark
 {
     private static Lazy<byte[][]> _lazyTestData = new(() =>
@@ -93,7 +94,7 @@ public class CountLeadingZerosBenchmark
         return totalCount;
     }
 
-    [Benchmark(Baseline = true, Description = "Combined (Current)")]
+    [Benchmark(Baseline = true, Description = "Combined (Current) - 16bytes SIMD threshold")]
     public int Combined()
     {
         int totalCount = 0;
@@ -209,11 +210,7 @@ public class CountLeadingZerosBenchmark
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int CountLeadingZerosCombinedImpl(ReadOnlySpan<byte> data)
     {
-        // intentionally commenting out, since other methods won't have it also
-        //if (data.Length == 0)
-        //    return 0;
-
-        if (data.Length < 16)
+        if (data.Length < 64)
             return CountLeadingZerosScalarImpl(data);
 
         int count = CountLeadingZerosSimdImpl(data, out int processed);
