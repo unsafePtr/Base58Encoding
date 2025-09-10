@@ -1,4 +1,5 @@
 using BenchmarkDotNet.Attributes;
+using BenchmarkDotNet.Columns;
 using BenchmarkDotNet.Diagnosers;
 using BenchmarkDotNet.Jobs;
 using System.Runtime.CompilerServices;
@@ -8,7 +9,9 @@ using Base58Encoding.Benchmarks.Common;
 namespace Base58Encoding.Benchmarks;
 
 [SimpleJob(RuntimeMoniker.Net90)]
+[SimpleJob(RuntimeMoniker.Net10_0)]
 [DisassemblyDiagnoser(exportCombinedDisassemblyReport: true)]
+[HideColumns("Job", "Error", "StdDev", "Median", "RatioSD")]
 public class BoundsCheckComparisonBenchmark
 {
     private const int Base = 58;
