@@ -109,8 +109,6 @@ public partial class Base58
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static int CountLeadingCharacters(ReadOnlySpan<char> text, char target)
     {
-        if (text.IsEmpty) return 0;
-
         int count = 0;
         ref char searchSpace = ref MemoryMarshal.GetReference(text);
 
