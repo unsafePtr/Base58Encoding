@@ -109,34 +109,8 @@ public partial class Base58
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static int CountLeadingCharacters(ReadOnlySpan<char> text, char target)
     {
-        int count = 0;
-        ref char searchSpace = ref MemoryMarshal.GetReference(text);
+        int mismatchIndex = text.IndexOfAnyExcept(target);
 
-        int length = text.Length;
-
-        while (length >= 4 && count + 3 < text.Length)
-        {
-            ulong fourChars = Unsafe.ReadUnaligned<ulong>(ref Unsafe.As<char, byte>(ref Unsafe.Add(ref searchSpace, count)));
-
-            ulong targetPattern = ((ulong)target) | (((ulong)target) << 16) | (((ulong)target) << 32) | (((ulong)target) << 48);
-
-            if (fourChars != targetPattern)
-            {
-                if (Unsafe.Add(ref searchSpace, count) != target) return count;
-                if (Unsafe.Add(ref searchSpace, count + 1) != target) return count + 1;
-                if (Unsafe.Add(ref searchSpace, count + 2) != target) return count + 2;
-                return count + 3;
-            }
-
-            count += 4;
-            length -= 4;
-        }
-
-        while (count < text.Length && Unsafe.Add(ref searchSpace, count) == target)
-        {
-            count++;
-        }
-
-        return count;
+        return mismatchIndex == -1 ? text.Length : mismatchIndex;
     }
 }
