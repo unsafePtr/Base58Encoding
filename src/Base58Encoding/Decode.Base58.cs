@@ -122,7 +122,7 @@ public partial class Base58
                 // Validate + convert using Bitcoin decode table (return null for invalid chars)
                 if (c >= 128 || bitcoinDecodeTable[c] == 255)
                     return null;
-                
+
                 rawBase58[j] = bitcoinDecodeTable[c];
             }
         }
@@ -196,9 +196,6 @@ public partial class Base58
 
     internal static byte[]? DecodeBitcoin64Fast(ReadOnlySpan<char> encoded)
     {
-        // Validate string length - should be between 1 and 88 chars for 64-byte output
-        if (encoded.Length > 88) return null;
-
         int charCount = encoded.Length;
 
         // Convert to raw base58 digits with validation + conversion in one pass
@@ -219,7 +216,7 @@ public partial class Base58
                 // Validate + convert using Bitcoin decode table (return null for invalid chars)
                 if (c >= 128 || bitcoinDecodeTable[c] == 255)
                     return null;
-                
+
                 rawBase58[j] = bitcoinDecodeTable[c];
             }
         }

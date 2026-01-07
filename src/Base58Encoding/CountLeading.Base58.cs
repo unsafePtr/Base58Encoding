@@ -9,7 +9,7 @@ public partial class Base58
 {
     internal static int CountLeadingZeros(ReadOnlySpan<byte> data)
     {
-        if (data.Length < 64)
+        if (data.Length < 32)
             return CountLeadingZerosScalar(data);
 
         int count = CountLeadingZerosSimd(data, out int processed);

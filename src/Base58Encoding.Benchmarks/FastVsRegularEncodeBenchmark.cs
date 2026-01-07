@@ -5,8 +5,8 @@ namespace Base58Encoding.Benchmarks;
 [MemoryDiagnoser]
 public class FastVsRegularEncodeBenchmark
 {
-    public byte[] _data;
-    private string _encodedBase58;
+    private byte[] _data = default!;
+    private string _encodedBase58 = default!;
 
     [GlobalSetup]
     public void Setup()
