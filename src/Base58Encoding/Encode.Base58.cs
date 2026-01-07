@@ -242,12 +242,11 @@ public partial class Base58
             rawBase58[5 * i + 1] = (byte)((v / 195112U) % 58U);
             rawBase58[5 * i + 0] = (byte)(v / 11316496U);
 
-            // Defensive check - ensure all values are valid Base58 digits
-            if (rawBase58[5 * i + 0] >= 58 || rawBase58[5 * i + 1] >= 58 ||
-                rawBase58[5 * i + 2] >= 58 || rawBase58[5 * i + 3] >= 58 || rawBase58[5 * i + 4] >= 58)
-            {
-                throw new InvalidOperationException($"Invalid base58 digit generated at position {i}: {rawBase58[5 * i + 0]}, {rawBase58[5 * i + 1]}, {rawBase58[5 * i + 2]}, {rawBase58[5 * i + 3]}, {rawBase58[5 * i + 4]}");
-            }
+            // Debug.Assert - ensure all values are valid Base58 digits (algorithm correctness check)
+            Debug.Assert(rawBase58[5 * i + 0] < 58 && rawBase58[5 * i + 1] < 58 &&
+                         rawBase58[5 * i + 2] < 58 && rawBase58[5 * i + 3] < 58 && 
+                         rawBase58[5 * i + 4] < 58, 
+                         $"Invalid base58 digit generated at position {i} - algorithm bug");
         }
 
         // Count leading zeros in raw output
