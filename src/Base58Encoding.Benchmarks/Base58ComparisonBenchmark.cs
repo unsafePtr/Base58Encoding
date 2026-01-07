@@ -1,6 +1,7 @@
+using Base58Encoding.Benchmarks.Common;
+
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Diagnosers;
-using Base58Encoding.Benchmarks.Common;
 
 namespace Base58Encoding.Benchmarks;
 

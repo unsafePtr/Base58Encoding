@@ -1,4 +1,4 @@
-﻿namespace Base58Encoding.Tests;
+namespace Base58Encoding.Tests;
 
 public class Base58EncodeFast
 {

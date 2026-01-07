@@ -1,9 +1,10 @@
-using BenchmarkDotNet.Attributes;
-using BenchmarkDotNet.Jobs;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
+
+using BenchmarkDotNet.Attributes;
+using BenchmarkDotNet.Jobs;
 
 namespace Base58Encoding.Benchmarks;
 

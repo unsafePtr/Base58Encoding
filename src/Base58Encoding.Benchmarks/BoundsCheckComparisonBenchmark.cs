@@ -1,9 +1,11 @@
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+
+using Base58Encoding.Benchmarks.Common;
+
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Diagnosers;
 using BenchmarkDotNet.Jobs;
-using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
-using Base58Encoding.Benchmarks.Common;
 
 namespace Base58Encoding.Benchmarks;
 

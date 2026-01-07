@@ -1,5 +1,6 @@
-using BenchmarkDotNet.Attributes;
 using System.Buffers.Binary;
+
+using BenchmarkDotNet.Attributes;
 
 namespace Base58Encoding.Benchmarks;
 
