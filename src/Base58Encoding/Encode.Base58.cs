@@ -244,8 +244,8 @@ public partial class Base58
 
             // Debug.Assert - ensure all values are valid Base58 digits (algorithm correctness check)
             Debug.Assert(rawBase58[5 * i + 0] < 58 && rawBase58[5 * i + 1] < 58 &&
-                         rawBase58[5 * i + 2] < 58 && rawBase58[5 * i + 3] < 58 && 
-                         rawBase58[5 * i + 4] < 58, 
+                         rawBase58[5 * i + 2] < 58 && rawBase58[5 * i + 3] < 58 &&
+                         rawBase58[5 * i + 4] < 58,
                          $"Invalid base58 digit generated at position {i} - algorithm bug");
         }
 
@@ -284,7 +284,7 @@ public partial class Base58
         });
     }
 
-    private readonly ref struct EncodeFastState
+    internal readonly ref struct EncodeFastState
     {
         public readonly ReadOnlySpan<byte> RawBase58;
         public readonly int InLeadingZeros;
@@ -300,7 +300,7 @@ public partial class Base58
         }
     }
 
-    private readonly ref struct EncodeGenericFinalString
+    internal readonly ref struct EncodeGenericFinalString
     {
         public readonly ReadOnlySpan<char> Alphabet;
         public readonly ReadOnlySpan<byte> Digits;
