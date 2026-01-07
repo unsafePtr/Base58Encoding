@@ -1,13 +1,14 @@
 # Base58 Encoding Library
 
-A .NET 9.0 Base58 encoding and decoding library with support for multiple alphabet variants.
+A .NET 10.0 Base58 encoding and decoding library with support for multiple alphabet variants.
 
 ## Features
 
-- **Multiple Alphabets**: Built-in support for Bitcoin(IFPS/Sui), Ripple, and Flickr alphabets
+- **Multiple Alphabets**: Built-in support for Bitcoin(IFPS/Sui/Solana), Ripple, and Flickr alphabets
 - **Memory Efficient**: Uses stackalloc operations when possible to minimize allocations
 - **Type Safe**: Leverages ReadOnlySpan and ReadOnlyMemory for safe memory operations
 - **Intrinsics**: Uses SIMD `Vector128/Vector256` and unrolled loop for counting leading zeros
+- **Optimized Hot Paths**: Fast fixed-length encode/decode for 32-byte and 64-byte inputs using Firedancer-like optimizations
 
 ## Usage
 
@@ -24,9 +25,27 @@ byte[] decoded = Base58.Bitcoin.Decode(encoded);
 // Ripple / Flickr
 Base58.Ripple.Encode(data);
 Base58.Flickr.Encode(data);
+```
 
-// Custom
-new Base58(Base58Alphabet.Custom(""));
+## Performance
+
+The library automatically uses optimized fast paths for common fixed-size inputs:
+- **32-byte inputs** (Bitcoin/Solana addresses, SHA-256 hashes): 8.5x faster encoding
+- **64-byte inputs** (SHA-512 hashes): Similar performance improvements
+
+These optimizations are based on Firedancer's specialized Base58 algorithms and are transparent to the user. Unlike Firedancer however, we fallback to the generic approach in case of edge-cases.
+
+**Algorithm Details:**
+- Uses **Mixed Radix Conversion (MRC)** with intermediate base 58^5 representation
+- Precomputed multiplication tables replace expensive division operations
+- Converts binary data to base 58^5 limbs, then to raw base58 digits
+- Matrix multiplication approach processes 5 base58 digits simultaneously
+- Separate encode/decode tables for 32-byte and 64-byte fixed sizes
+- Achieves ~2.5x speedup through table-based optimizations vs iterative division
+
+**References:**
+- [Firedancer C implementation](https://github.com/firedancer-io/firedancer/tree/main/src/ballet/base58)
+
 ```
 
 ## Benchmarks
