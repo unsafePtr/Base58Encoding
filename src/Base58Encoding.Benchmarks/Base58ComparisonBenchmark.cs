@@ -1,15 +1,11 @@
-using BenchmarkDotNet.Attributes;
-using BenchmarkDotNet.Columns;
-using BenchmarkDotNet.Diagnosers;
-using BenchmarkDotNet.Jobs;
 using Base58Encoding.Benchmarks.Common;
+
+using BenchmarkDotNet.Attributes;
+using BenchmarkDotNet.Diagnosers;
 
 namespace Base58Encoding.Benchmarks;
 
-[SimpleJob(RuntimeMoniker.Net90)]
-[SimpleJob(RuntimeMoniker.Net10_0)]
 [MemoryDiagnoser]
-[DisassemblyDiagnoser(exportCombinedDisassemblyReport: true)]
 [HideColumns("Job", "Error", "StdDev", "Median", "RatioSD")]
 public class Base58ComparisonBenchmark
 {

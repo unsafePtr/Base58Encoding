@@ -270,28 +270,36 @@ public class Base58Tests
         }
     }
 
-    [Fact]
-    public void DecodeTable_Generation_ProducesCorrectMapping()
+    [Theory]
+    [InlineData(new byte[] { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 }, "11111111111111111111111111111112")] // All zeros + 1
+    [InlineData(new byte[] { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1 }, "1111111111111111111111111111115S")] // 257 case
+    [InlineData(new byte[] { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF }, "JEKNVnkbo3jma5nREBBJCDoXFVeKkD56V3xKrvRmWxFG")] // All 0xFF
+    [InlineData(new byte[] { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFE }, "JEKNVnkbo3jma5nREBBJCDoXFVeKkD56V3xKrvRmWxFF")] // All 0xFF - 1
+    public void DecodeBitcoin32Fast_WithFireDancerTestVectors_WorksCorrectly(byte[] expectedBytes, string encoded)
     {
-        // Test that we can generate correct decode tables using the Custom method
-        const string rippleAlphabet = "rpshnaf39wBUDNEGHJKLM4PQRST7VWXYZ2bcdeCg65jkm8oFqi1tuvAxyz";
-        const string flickrAlphabet = "123456789abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ";
+        // Act - Test the fast decode method directly
+        var decoded = Base58.DecodeBitcoin32Fast(encoded);
 
-        var rippleCustom = Base58Alphabet.Custom(rippleAlphabet);
-        var flickrCustom = Base58Alphabet.Custom(flickrAlphabet);
-
-        // Test simple single character encoding/decoding
-        var testByte = new byte[] { 1 };
-
-        var rippleEncoded = new Base58(rippleCustom).Encode(testByte);
-        var rippleDecoded = new Base58(rippleCustom).Decode(rippleEncoded);
-        Assert.Equal(testByte, rippleDecoded);
-
-        var flickrEncoded = new Base58(flickrCustom).Encode(testByte);
-        var flickrDecoded = new Base58(flickrCustom).Decode(flickrEncoded);
-        Assert.Equal(testByte, flickrDecoded);
-
-        // The encoded results should be different character sets
-        Assert.NotEqual(rippleEncoded, flickrEncoded);
+        // Assert
+        Assert.NotNull(decoded);
+        Assert.Equal(expectedBytes, decoded);
+        Assert.Equal(32, decoded.Length);
     }
+
+    [Theory]
+    [InlineData(new byte[] { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 }, "1111111111111111111111111111111111111111111111111111111111111112")] // All zeros + 1
+    [InlineData(new byte[] { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1 }, "111111111111111111111111111111111111111111111111111111111111115S")] // 257 case  
+    [InlineData(new byte[] { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF }, "67rpwLCuS5DGA8KGZXKsVQ7dnPb9goRLoKfgGbLfQg9WoLUgNY77E2jT11fem3coV9nAkguBACzrU1iyZM4B8roQ")] // All 0xFF
+    [InlineData(new byte[] { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFE }, "67rpwLCuS5DGA8KGZXKsVQ7dnPb9goRLoKfgGbLfQg9WoLUgNY77E2jT11fem3coV9nAkguBACzrU1iyZM4B8roP")] // All 0xFF - 1
+    public void DecodeBitcoin64Fast_WithFireDancerTestVectors_WorksCorrectly(byte[] expectedBytes, string encoded)
+    {
+        // Act - Test the fast decode method directly
+        var decoded = Base58.DecodeBitcoin64Fast(encoded);
+
+        // Assert
+        Assert.NotNull(decoded);
+        Assert.Equal(expectedBytes, decoded);
+        Assert.Equal(64, decoded.Length);
+    }
+
 }

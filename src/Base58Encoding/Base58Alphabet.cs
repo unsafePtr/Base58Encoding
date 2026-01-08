@@ -42,7 +42,7 @@ public class Base58Alphabet
 
     // Static decode tables - using ReadOnlyMemory for better performance
     private static readonly ReadOnlyMemory<byte> BitcoinDecodeTable = new byte[]
-{
+    {
         255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
         255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
         255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
@@ -51,7 +51,7 @@ public class Base58Alphabet
          22,  23,  24,  25,  26,  27,  28,  29,  30,  31,  32, 255, 255, 255, 255, 255,
         255,  33,  34,  35,  36,  37,  38,  39,  40,  41,  42,  43, 255,  44,  45,  46,
          47,  48,  49,  50,  51,  52,  53,  54,  55,  56,  57, 255, 255, 255, 255, 255
-};
+    };
 
     private static readonly ReadOnlyMemory<byte> RippleDecodeTable = new byte[]
     {
@@ -76,25 +76,4 @@ public class Base58Alphabet
         255,   9,  10,  11,  12,  13,  14,  15,  16,  17,  18,  19, 255,  20,  21,  22,
          23,  24,  25,  26,  27,  28,  29,  30,  31,  32,  33, 255, 255, 255, 255, 255
     };
-
-    public static Base58Alphabet Custom(string characters)
-    {
-        if (characters.Length != 58)
-        {
-            ThrowHelper.ThrowNotExactLength();
-        }
-
-        var decodeTable = new byte[128];
-        for (int i = 0; i < 128; i++)
-        {
-            decodeTable[i] = 255;
-        }
-
-        for (int i = 0; i < characters.Length; i++)
-        {
-            decodeTable[characters[i]] = (byte)i;
-        }
-
-        return new Base58Alphabet(characters.AsMemory(), decodeTable, characters[0]);
-    }
 }

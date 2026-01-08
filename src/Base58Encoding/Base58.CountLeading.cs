@@ -1,4 +1,4 @@
-﻿using System.Numerics;
+using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
@@ -7,10 +7,9 @@ namespace Base58Encoding;
 
 public partial class Base58
 {
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static int CountLeadingZeros(ReadOnlySpan<byte> data)
     {
-        if (data.Length < 64)
+        if (data.Length < 32)
             return CountLeadingZerosScalar(data);
 
         int count = CountLeadingZerosSimd(data, out int processed);
@@ -20,7 +19,6 @@ public partial class Base58
         return count + CountLeadingZerosScalar(data.Slice(count));
     }
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static int CountLeadingZerosSimd(ReadOnlySpan<byte> data, out int processed)
     {
         int count = 0;
@@ -72,7 +70,6 @@ public partial class Base58
         return count;
     }
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static int CountLeadingZerosScalar(ReadOnlySpan<byte> data)
     {
         int count = 0;

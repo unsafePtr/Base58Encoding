@@ -1,10 +1,8 @@
-using BenchmarkDotNet.Attributes;
-using BenchmarkDotNet.Columns;
-using BenchmarkDotNet.Jobs;
-using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using static System.Net.Mime.MediaTypeNames;
+
+using BenchmarkDotNet.Attributes;
+using BenchmarkDotNet.Jobs;
 
 namespace Base58Encoding.Benchmarks;
 

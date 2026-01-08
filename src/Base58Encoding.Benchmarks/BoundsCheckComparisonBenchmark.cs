@@ -1,10 +1,11 @@
-using BenchmarkDotNet.Attributes;
-using BenchmarkDotNet.Columns;
-using BenchmarkDotNet.Diagnosers;
-using BenchmarkDotNet.Jobs;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+
 using Base58Encoding.Benchmarks.Common;
+
+using BenchmarkDotNet.Attributes;
+using BenchmarkDotNet.Diagnosers;
+using BenchmarkDotNet.Jobs;
 
 namespace Base58Encoding.Benchmarks;
 
@@ -17,7 +18,6 @@ public class BoundsCheckComparisonBenchmark
     private const int Base = 58;
     private const int MaxStackallocByte = 512;
     private byte[] _testData = null!;
-    private Base58 _base58 = null!;
 
     [Params(TestVectors.VectorType.BitcoinAddress, TestVectors.VectorType.SolanaAddress, TestVectors.VectorType.SolanaTx, TestVectors.VectorType.IPFSHash, TestVectors.VectorType.MoneroAddress, TestVectors.VectorType.FlickrTestData, TestVectors.VectorType.RippleTestData)]
     public TestVectors.VectorType VectorType { get; set; }
@@ -26,7 +26,6 @@ public class BoundsCheckComparisonBenchmark
     public void Setup()
     {
         _testData = TestVectors.GetVector(VectorType);
-        _base58 = Base58.Bitcoin;
     }
 
     [Benchmark(Baseline = true)]
