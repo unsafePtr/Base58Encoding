@@ -46,11 +46,11 @@ These optimizations are based on Firedancer's specialized Base58 algorithms and 
 **References:**
 - [Firedancer C implementation](https://github.com/firedancer-io/firedancer/tree/main/src/ballet/base58)
 
-```
 
 ## Benchmarks
 
 ```
+
 BenchmarkDotNet v0.15.8, Windows 11 (10.0.26200.7462/25H2/2025Update/HudsonValley2)
 13th Gen Intel Core i7-13700KF 3.40GHz, 1 CPU, 24 logical and 16 physical cores
 .NET SDK 10.0.101
