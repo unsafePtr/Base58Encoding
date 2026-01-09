@@ -93,7 +93,6 @@ public partial class Base58
 
     internal static string EncodeBitcoin32Fast(ReadOnlySpan<byte> data)
     {
-        // Count leading zeros (needed for final output)
         int inLeadingZeros = CountLeadingZeros(data);
 
         if (inLeadingZeros == data.Length)
@@ -140,8 +139,6 @@ public partial class Base58
             rawBase58[5 * i + 2] = (byte)((v / 3364U) % 58U);
             rawBase58[5 * i + 1] = (byte)((v / 195112U) % 58U);
             rawBase58[5 * i + 0] = (byte)(v / 11316496U);
-
-            // Continue processing all values
         }
 
         // Count leading zeros in raw output
@@ -156,12 +153,9 @@ public partial class Base58
         Debug.Assert(skip >= 0, "rawLeadingZeros should always be >= inLeadingZeros by Base58 math");
         int outputLength = Base58BitcoinTables.Raw58Sz32 - skip;
 
-        // Create state for string.Create
         var state = new EncodeFastState(rawBase58, inLeadingZeros, rawLeadingZeros, outputLength);
-
         return string.Create(outputLength, state, static (span, state) =>
         {
-            // Fill leading '1's for input leading zeros
             if (state.InLeadingZeros > 0)
             {
                 span[..state.InLeadingZeros].Fill('1');
@@ -181,7 +175,6 @@ public partial class Base58
 
     private static string EncodeBitcoin64Fast(ReadOnlySpan<byte> data)
     {
-        // Count leading zeros (needed for final output)
         int inLeadingZeros = CountLeadingZeros(data);
 
         if (inLeadingZeros == data.Length)
@@ -242,7 +235,6 @@ public partial class Base58
             rawBase58[5 * i + 1] = (byte)((v / 195112U) % 58U);
             rawBase58[5 * i + 0] = (byte)(v / 11316496U);
 
-            // Debug.Assert - ensure all values are valid Base58 digits (algorithm correctness check)
             Debug.Assert(rawBase58[5 * i + 0] < 58 && rawBase58[5 * i + 1] < 58 &&
                          rawBase58[5 * i + 2] < 58 && rawBase58[5 * i + 3] < 58 &&
                          rawBase58[5 * i + 4] < 58,
@@ -256,17 +248,13 @@ public partial class Base58
             if (rawBase58[rawLeadingZeros] != 0) break;
         }
 
-        // Calculate skip and final length
         int skip = rawLeadingZeros - inLeadingZeros;
         Debug.Assert(skip >= 0, "rawLeadingZeros should always be >= inLeadingZeros by Base58 math");
         int outputLength = Base58BitcoinTables.Raw58Sz64 - skip;
 
-        // Create state for string.Create
         var state = new EncodeFastState(rawBase58, inLeadingZeros, rawLeadingZeros, outputLength);
-
         return string.Create(outputLength, state, static (span, state) =>
         {
-            // Fill leading '1's for input leading zeros
             if (state.InLeadingZeros > 0)
             {
                 span[..state.InLeadingZeros].Fill('1');
