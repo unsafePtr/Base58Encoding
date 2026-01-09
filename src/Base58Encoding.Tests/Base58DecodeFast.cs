@@ -76,10 +76,20 @@ public class Base58DecodeFast
     }
 
     [Theory]
-    [InlineData("invalid0chars")] // Invalid character '0'
-    public void Decode32Fast_WithInvalidInput_ReturnsNull(string input)
+    [InlineData("invalid")] // Invalid character 'l'
+    [InlineData("0chars")] // Invalid character '0'
+    public void Decode64Fast_WithInvalidInput_ReturnsNull(string input)
     {
-        Assert.Null(Base58.DecodeBitcoin64Fast(input));
+        Assert.Throws<ArgumentException>(() => Base58.DecodeBitcoin64Fast(input));
+    }
+
+    [Theory]
+    [InlineData("invalid")] // Invalid character 'l'
+    [InlineData("0chars")] // Invalid character '0'
+
+    public void Decode32ast_WithInvalidInput_ReturnsNull(string input)
+    {
+        Assert.Throws<ArgumentException>(() => Base58.DecodeBitcoin32Fast(input));
     }
 
     [Fact]

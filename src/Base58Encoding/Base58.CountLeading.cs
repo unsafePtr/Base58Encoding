@@ -45,26 +45,6 @@ public partial class Base58
                 length -= Vector256<byte>.Count;
             }
         }
-        else if (Vector128.IsHardwareAccelerated && length >= Vector128<byte>.Count)
-        {
-            var zeroVector = Vector128<byte>.Zero;
-
-            while (length >= Vector128<byte>.Count)
-            {
-                var vector = Vector128.LoadUnsafe(ref searchSpace, (nuint)count);
-                var comparison = Vector128.Equals(vector, zeroVector);
-                uint mask = comparison.ExtractMostSignificantBits();
-
-                if (mask != ushort.MaxValue)
-                {
-                    processed = count + Vector128<byte>.Count;
-                    return count + BitOperations.TrailingZeroCount(~mask);
-                }
-
-                count += Vector128<byte>.Count;
-                length -= Vector128<byte>.Count;
-            }
-        }
 
         processed = count;
         return count;

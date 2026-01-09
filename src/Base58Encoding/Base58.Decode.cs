@@ -114,16 +114,16 @@ public partial class Base58
             else
             {
                 char c = encoded[j - prepend0];
-                // Validate + convert using Bitcoin decode table (return null for invalid chars)
+                // Validate + convert using Bitcoin decode table
                 if (c >= 128 || bitcoinDecodeTable[c] == 255)
-                    return null;
+                    ThrowHelper.ThrowInvalidCharacter(c);
 
                 rawBase58[j] = bitcoinDecodeTable[c];
             }
         }
 
         // Convert to intermediate format (base 58^5)
-        Span<ulong> intermediate = stackalloc ulong[Base58BitcoinTables.IntermediateSz32]; // 9 elements
+        Span<ulong> intermediate = stackalloc ulong[Base58BitcoinTables.IntermediateSz32];
 
         for (int i = 0; i < Base58BitcoinTables.IntermediateSz32; i++)
         {
@@ -135,7 +135,7 @@ public partial class Base58
         }
 
         // Convert to overcomplete base 2^32 using decode table
-        Span<ulong> binary = stackalloc ulong[Base58BitcoinTables.BinarySz32]; // 8 elements
+        Span<ulong> binary = stackalloc ulong[Base58BitcoinTables.BinarySz32];
 
         for (int j = 0; j < Base58BitcoinTables.BinarySz32; j++)
         {
@@ -183,6 +183,8 @@ public partial class Base58
         }
 
         // Leading zeros in output must match leading '1's in input
+        // might be edge case since base58 of 32bytes can be between 32 and 44 characters.
+        // will be handled by generic decoder if lengths don't match
         if (outputLeadingZeros != inputLeadingOnes) return null;
 
         // Return the full 32 bytes - the result should always be 32 bytes for 32-byte decode
@@ -194,7 +196,7 @@ public partial class Base58
         int charCount = encoded.Length;
 
         // Convert to raw base58 digits with validation + conversion in one pass
-        Span<byte> rawBase58 = stackalloc byte[Base58BitcoinTables.Raw58Sz64]; // 90 bytes
+        Span<byte> rawBase58 = stackalloc byte[Base58BitcoinTables.Raw58Sz64];
         var bitcoinDecodeTable = Base58Alphabet.Bitcoin.DecodeTable.Span;
 
         // Prepend zeros to make exactly Raw58Sz64 characters
@@ -208,16 +210,16 @@ public partial class Base58
             else
             {
                 char c = encoded[j - prepend0];
-                // Validate + convert using Bitcoin decode table (return null for invalid chars)
+                // Validate + convert using Bitcoin decode table
                 if (c >= 128 || bitcoinDecodeTable[c] == 255)
-                    return null;
+                    ThrowHelper.ThrowInvalidCharacter(c);
 
                 rawBase58[j] = bitcoinDecodeTable[c];
             }
         }
 
         // Convert to intermediate format (base 58^5)
-        Span<ulong> intermediate = stackalloc ulong[Base58BitcoinTables.IntermediateSz64]; // 18 elements
+        Span<ulong> intermediate = stackalloc ulong[Base58BitcoinTables.IntermediateSz64];
 
         for (int i = 0; i < Base58BitcoinTables.IntermediateSz64; i++)
         {
@@ -229,7 +231,7 @@ public partial class Base58
         }
 
         // Convert to overcomplete base 2^32 using decode table
-        Span<ulong> binary = stackalloc ulong[Base58BitcoinTables.BinarySz64]; // 16 elements
+        Span<ulong> binary = stackalloc ulong[Base58BitcoinTables.BinarySz64];
 
         for (int j = 0; j < Base58BitcoinTables.BinarySz64; j++)
         {
@@ -277,6 +279,8 @@ public partial class Base58
         }
 
         // Leading zeros in output must match leading '1's in input
+        // might be edge case since base58 of 64bytes can be between 64 and 88 characters.
+        // will be handled by generic decoder if lengths don't match
         if (outputLeadingZeros != inputLeadingOnes) return null;
 
         // Return the full 64 bytes - the result should always be 64 bytes for 64-byte decode
