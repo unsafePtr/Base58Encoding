@@ -11,7 +11,7 @@ on:
       - 'src/Directory.Packages.props'
       - 'src/NuGet.Config'
       - 'src/PACKAGE.md'
-      - 'global.json'
+      - 'src/global.json'
   pull_request:
     branches: [ master, main ]
     paths:
@@ -20,7 +20,7 @@ on:
       - 'src/Directory.Packages.props'
       - 'src/NuGet.Config'
       - 'src/PACKAGE.md'
-      - 'global.json'
+      - 'src/global.json'
   workflow_dispatch:
     inputs:
       version:
