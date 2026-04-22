@@ -38,6 +38,8 @@ public class SimpleLeadingZerosTest
     [InlineData(31)]
     public void CountLeadingZeros_32Size_ReturnsCorrectNumber(int zerosCount)
     {
+        Assert.SkipUnless(Vector256.IsHardwareAccelerated, "Requires Vector256 hardware acceleration");
+
         // Arrange
         var data = new byte[32];
         data.AsSpan(0, zerosCount).Fill(0x00);
@@ -53,6 +55,8 @@ public class SimpleLeadingZerosTest
     [Fact]
     public void CountLeadingZeros_512Size_ReturnsCorrectNumber()
     {
+        Assert.SkipUnless(Vector256.IsHardwareAccelerated, "Requires Vector256 hardware acceleration");
+
         // Arrange
         var zerosCount = 123;
         var data = new byte[512];
