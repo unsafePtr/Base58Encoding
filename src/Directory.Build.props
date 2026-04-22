@@ -6,23 +6,28 @@
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 
-    <!-- Use hardlinks instead of physical file copies for output artifacts.
-         On NTFS/ReFS this skips actual I/O and drops CopyFilesToOutputDirectory overhead. -->
+    <!-- Hardlinks avoid physical I/O on NTFS/ReFS during CopyFilesToOutputDirectory. -->
     <CreateHardLinksForCopyFilesToOutputDirectoryIfPossible>true</CreateHardLinksForCopyFilesToOutputDirectoryIfPossible>
     <CreateHardLinksForCopyAdditionalFilesIfPossible>true</CreateHardLinksForCopyAdditionalFilesIfPossible>
     <CreateHardLinksForPublishFilesIfPossible>true</CreateHardLinksForPublishFilesIfPossible>
 
-    <!-- Enable static-graph NuGet restore so that dotnet restore uses a single
-         fast traversal pass rather than re-evaluating each project individually. -->
+    <!-- Single fast traversal pass instead of per-project re-evaluation. -->
     <RestoreUseStaticGraphEvaluation>true</RestoreUseStaticGraphEvaluation>
 
-    <!-- Disable Roslyn analyzers during local dev inner-loop builds.
-         CI sets ContinuousIntegrationBuild=true (e.g. GitHub Actions default env var),
-         so analysis is still enforced on every PR and main-branch build. -->
-    <RunAnalyzers Condition="'$(ContinuousIntegrationBuild)' != 'true'">false</RunAnalyzers>
+    <!-- Reference assemblies let downstream projects compile before the full build finishes. -->
+    <ProduceReferenceAssembly>true</ProduceReferenceAssembly>
 
-    <!-- Code-style enforcement (IDE* rules) follows the same CI-only pattern. -->
+    <!-- Consolidate all outputs under artifacts/ — CI caches one directory, .gitignore is trivial. -->
+    <UseArtifactsOutput>true</UseArtifactsOutput>
+
+    <!-- Map the standard CI=true env var (GitHub Actions, etc.) to the MSBuild property. -->
+    <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
+
+    <!-- Analyzers, code style, and SourceLink are CI-only — skip on local inner-loop builds. -->
+    <RunAnalyzers Condition="'$(ContinuousIntegrationBuild)' != 'true'">false</RunAnalyzers>
     <EnforceCodeStyleInBuild Condition="'$(ContinuousIntegrationBuild)' != 'true'">false</EnforceCodeStyleInBuild>
+    <EnableSourceLink Condition="'$(ContinuousIntegrationBuild)' != 'true'">false</EnableSourceLink>
+    <IncludeSourceRevisionInInformationalVersion Condition="'$(ContinuousIntegrationBuild)' != 'true'">false</IncludeSourceRevisionInInformationalVersion>
   </PropertyGroup>
 
 </Project>
