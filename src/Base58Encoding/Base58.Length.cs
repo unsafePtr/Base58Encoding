@@ -8,7 +8,7 @@ public static partial class Base58
     /// </summary>
     /// <param name="byteCount">Length of the input data in bytes.</param>
     /// <returns>Maximum number of characters/bytes written by <c>Encode</c>.</returns>
-    public static int GetEncodedLength(int byteCount)
+    public static int GetMaxEncodedLength(int byteCount)
     {
         if (byteCount < 0)
         {

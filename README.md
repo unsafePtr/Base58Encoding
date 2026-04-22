@@ -39,7 +39,7 @@ using Base58Encoding;
 byte[] data = { 0x01, 0x02, 0x03, 0x04 };
 
 // Size the output buffer using the helper
-int maxLen = Base58.GetEncodedLength(data.Length);
+int maxLen = Base58.GetMaxEncodedLength(data.Length);
 Span<byte> encodedBytes = stackalloc byte[maxLen]; // or rent from ArrayPool
 
 int written = Base58.Bitcoin.Encode(data, encodedBytes);
@@ -54,7 +54,7 @@ int decodedLen = Base58.Bitcoin.Decode(result, decodedBytes);
 //   int Decode(ReadOnlySpan<byte>  encoded, Span<byte> destination)
 ```
 
-`GetEncodedLength(byteCount)` returns a safe upper bound for the encoded output size.  
+`GetMaxEncodedLength(byteCount)` returns a safe upper bound for the encoded output size.  
 `GetTypicalDecodedLength(encodedLength)` returns a typical upper bound for decoded output (see its XML doc for the edge case around leading `'1'` characters).
 
 ## Performance

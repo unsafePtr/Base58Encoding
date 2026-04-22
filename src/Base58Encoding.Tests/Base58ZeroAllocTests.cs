@@ -5,18 +5,18 @@ namespace Base58Encoding.Tests;
 public class Base58ZeroAllocTests
 {
     [Fact]
-    public void GetEncodedLength_ReturnsUpperBound()
+    public void GetMaxEncodedLength_ReturnsUpperBound()
     {
-        Assert.Equal(0, Base58.GetEncodedLength(0));
-        Assert.True(Base58.GetEncodedLength(1) >= 2);
-        Assert.True(Base58.GetEncodedLength(32) >= 44);
-        Assert.True(Base58.GetEncodedLength(64) >= 88);
+        Assert.Equal(0, Base58.GetMaxEncodedLength(0));
+        Assert.True(Base58.GetMaxEncodedLength(1) >= 2);
+        Assert.True(Base58.GetMaxEncodedLength(32) >= 44);
+        Assert.True(Base58.GetMaxEncodedLength(64) >= 88);
     }
 
     [Fact]
-    public void GetEncodedLength_NegativeThrows()
+    public void GetMaxEncodedLength_NegativeThrows()
     {
-        Assert.Throws<ArgumentOutOfRangeException>(() => Base58.GetEncodedLength(-1));
+        Assert.Throws<ArgumentOutOfRangeException>(() => Base58.GetMaxEncodedLength(-1));
     }
 
     [Fact]
@@ -46,7 +46,7 @@ public class Base58ZeroAllocTests
 
             string expected = Base58.Bitcoin.Encode(data);
 
-            Span<byte> buffer = stackalloc byte[Base58.GetEncodedLength(data.Length)];
+            Span<byte> buffer = stackalloc byte[Base58.GetMaxEncodedLength(data.Length)];
             int written = Base58.Bitcoin.Encode(data, buffer);
 
             string actual = Encoding.ASCII.GetString(buffer[..written]);
@@ -58,7 +58,7 @@ public class Base58ZeroAllocTests
     public void Encode_ToBytes_WithLeadingZeros_PreservesOnes()
     {
         byte[] data = [0x00, 0x00, 0x00, 0x01, 0x02];
-        Span<byte> buffer = stackalloc byte[Base58.GetEncodedLength(data.Length)];
+        Span<byte> buffer = stackalloc byte[Base58.GetMaxEncodedLength(data.Length)];
         int written = Base58.Bitcoin.Encode(data, buffer);
 
         string actual = Encoding.ASCII.GetString(buffer[..written]);
@@ -70,7 +70,7 @@ public class Base58ZeroAllocTests
     public void Encode_ToBytes_AllZeros_WritesAllOnes()
     {
         byte[] data = new byte[10];
-        Span<byte> buffer = stackalloc byte[Base58.GetEncodedLength(data.Length)];
+        Span<byte> buffer = stackalloc byte[Base58.GetMaxEncodedLength(data.Length)];
         int written = Base58.Bitcoin.Encode(data, buffer);
 
         Assert.Equal(10, written);
@@ -104,7 +104,7 @@ public class Base58ZeroAllocTests
 
         string expected = Base58.Bitcoin.Encode(data);
 
-        Span<byte> buffer = stackalloc byte[Base58.GetEncodedLength(32)];
+        Span<byte> buffer = stackalloc byte[Base58.GetMaxEncodedLength(32)];
         int written = Base58.Bitcoin.Encode(data, buffer);
         string actual = Encoding.ASCII.GetString(buffer[..written]);
 
@@ -119,7 +119,7 @@ public class Base58ZeroAllocTests
 
         string expected = Base58.Bitcoin.Encode(data);
 
-        Span<byte> buffer = stackalloc byte[Base58.GetEncodedLength(64)];
+        Span<byte> buffer = stackalloc byte[Base58.GetMaxEncodedLength(64)];
         int written = Base58.Bitcoin.Encode(data, buffer);
         string actual = Encoding.ASCII.GetString(buffer[..written]);
 
@@ -280,7 +280,7 @@ public class Base58ZeroAllocTests
         var data = new byte[20];
         new Random(5).NextBytes(data);
 
-        Span<byte> encBuf = stackalloc byte[Base58.GetEncodedLength(data.Length)];
+        Span<byte> encBuf = stackalloc byte[Base58.GetMaxEncodedLength(data.Length)];
         int encWritten = Base58.Ripple.Encode(data, encBuf);
 
         Span<byte> decBuf = stackalloc byte[data.Length];
@@ -332,7 +332,7 @@ public class Base58ZeroAllocTests
         var data = new byte[20];
         new Random(6).NextBytes(data);
 
-        Span<byte> encBuf = stackalloc byte[Base58.GetEncodedLength(data.Length)];
+        Span<byte> encBuf = stackalloc byte[Base58.GetMaxEncodedLength(data.Length)];
         int encWritten = Base58.Flickr.Encode(data, encBuf);
 
         Span<byte> decBuf = stackalloc byte[data.Length];
