@@ -1,9 +1,9 @@
 namespace Base58Encoding;
 
-public partial class Base58
+public sealed partial class Base58
 {
     private const int Base = 58;
-    private const int MaxStackallocByte = 512;
+    private const int MaxStackallocByte = 256;
 
     private readonly ReadOnlyMemory<char> _characters;
     private readonly ReadOnlyMemory<byte> _decodeTable;
