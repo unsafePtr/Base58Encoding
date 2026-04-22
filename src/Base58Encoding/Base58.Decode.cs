@@ -1,6 +1,7 @@
 using System.Buffers;
 using System.Buffers.Binary;
 using System.Numerics;
+using System.Runtime.CompilerServices;
 
 namespace Base58Encoding;
 
@@ -108,6 +109,7 @@ public partial class Base58
         return DecodeGenericCore(encoded, destination);
     }
 
+    [SkipLocalsInit]
     private int DecodeGenericCore<TChar>(ReadOnlySpan<TChar> encoded, Span<byte> destination)
         where TChar : unmanaged, IBinaryInteger<TChar>
     {
@@ -154,6 +156,7 @@ public partial class Base58
         }
     }
 
+    [SkipLocalsInit]
     private byte[] DecodeGenericToArray<TChar>(ReadOnlySpan<TChar> encoded)
         where TChar : unmanaged, IBinaryInteger<TChar>
     {
@@ -252,6 +255,7 @@ public partial class Base58
     /// represent exactly 32 bytes (caller should fall back to generic decode).
     /// Throws on invalid character or insufficient destination when fast path matches.
     /// </summary>
+    [SkipLocalsInit]
     private static int TryDecodeBitcoin32Fast<TChar>(ReadOnlySpan<TChar> encoded, Span<byte> destination)
         where TChar : unmanaged, IBinaryInteger<TChar>
     {
@@ -350,6 +354,7 @@ public partial class Base58
         return 32;
     }
 
+    [SkipLocalsInit]
     private static int TryDecodeBitcoin64Fast<TChar>(ReadOnlySpan<TChar> encoded, Span<byte> destination)
         where TChar : unmanaged, IBinaryInteger<TChar>
     {
