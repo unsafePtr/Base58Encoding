@@ -112,8 +112,7 @@ public sealed partial class Base58<TAlphabet>
                 ThrowHelper.ThrowDestinationTooSmall(nameof(destination));
             }
 
-            var firstByte = TAlphabet.FirstCharacter;
-            destination[..leadingZeros].Fill(firstByte);
+            destination[..leadingZeros].Fill(TAlphabet.FirstCharacter);
             return leadingZeros;
         }
 
@@ -129,6 +128,7 @@ public sealed partial class Base58<TAlphabet>
             {
                 ThrowHelper.ThrowDestinationTooSmall(nameof(destination));
             }
+
             var state = new EncodeState(digits, 0, digitCount, TAlphabet.Characters, TAlphabet.FirstCharacter, leadingZeros);
             state.EmitReverse(destination);
             return outputLength;
@@ -148,6 +148,7 @@ public sealed partial class Base58<TAlphabet>
             {
                 ThrowHelper.ThrowDestinationTooSmall(nameof(destination));
             }
+
             var state = new EncodeState(rented, 0, digitCount, TAlphabet.Characters, TAlphabet.FirstCharacter, leadingZeros);
             state.EmitReverse(destination);
             return outputLength;
