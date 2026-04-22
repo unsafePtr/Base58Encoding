@@ -1,7 +1,9 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Text;
 
 namespace Base58Encoding.Tests;
 
+[SuppressMessage("Performance", "CA2014:Do not use stackalloc in loops", Justification = "Intentional — loop bounds are small and known-safe in tests")]
 public class Base58ZeroAllocTests
 {
     [Fact]
