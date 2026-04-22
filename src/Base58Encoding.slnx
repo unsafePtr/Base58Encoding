@@ -4,10 +4,11 @@
     <Platform Name="x64" />
     <Platform Name="x86" />
   </Configurations>
-  <Folder Name="Solution Items">
-    <File Path="../Directory.Build.props" />
-    <File Path="../Directory.Packages.props" />
-    <File Path="../NuGet.Config" />
+  <Folder Name="/Solution Items/">
+    <File Path="Directory.Build.props" />
+    <File Path="Directory.Packages.props" />
+    <File Path="NuGet.Config" />
+    <File Path="PACKAGE.md" />
   </Folder>
   <Project Path="Base58Encoding.Benchmarks/Base58Encoding.Benchmarks.csproj" />
   <Project Path="Base58Encoding.Tests/Base58Encoding.Tests.csproj" />
