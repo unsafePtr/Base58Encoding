@@ -112,7 +112,7 @@ public sealed partial class Base58<TAlphabet>
     private int DecodeGenericCore<TChar>(ReadOnlySpan<TChar> encoded, Span<byte> destination)
         where TChar : unmanaged, IBinaryInteger<TChar>
     {
-        TChar firstChar = TChar.CreateTruncating((ushort)TAlphabet.FirstCharacter);
+        TChar firstChar = TChar.CreateTruncating(TAlphabet.FirstCharacter);
         int leadingOnes = Base58.CountLeadingCharacters(encoded, firstChar);
         int scratchSize = encoded.Length * 733 / 1000 + 1;
 
@@ -159,7 +159,7 @@ public sealed partial class Base58<TAlphabet>
     private byte[] DecodeGenericToArray<TChar>(ReadOnlySpan<TChar> encoded)
         where TChar : unmanaged, IBinaryInteger<TChar>
     {
-        TChar firstChar = TChar.CreateTruncating((ushort)TAlphabet.FirstCharacter);
+        TChar firstChar = TChar.CreateTruncating(TAlphabet.FirstCharacter);
         int leadingOnes = Base58.CountLeadingCharacters(encoded, firstChar);
 
         if (leadingOnes == encoded.Length)
@@ -330,7 +330,7 @@ public sealed partial class Base58<TAlphabet>
             outputLeadingZeros += 4;
         }
 
-        TChar one = TChar.CreateTruncating((ushort)'1');
+        TChar one = TChar.CreateTruncating((byte)'1');
         int inputLeadingOnes = Base58.CountLeadingCharacters(encoded, one);
 
         if (outputLeadingZeros != inputLeadingOnes)
@@ -427,7 +427,7 @@ public sealed partial class Base58<TAlphabet>
             outputLeadingZeros += 4;
         }
 
-        TChar one = TChar.CreateTruncating((ushort)'1');
+        TChar one = TChar.CreateTruncating((byte)'1');
         int inputLeadingOnes = Base58.CountLeadingCharacters(encoded, one);
 
         if (outputLeadingZeros != inputLeadingOnes)

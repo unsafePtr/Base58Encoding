@@ -68,7 +68,7 @@ public sealed partial class Base58<TAlphabet>
 
         if (leadingZeros == data.Length)
         {
-            return new string(TAlphabet.FirstCharacter, leadingZeros);
+            return new string((char)TAlphabet.FirstCharacter, leadingZeros);
         }
 
         ReadOnlySpan<byte> inputSpan = data[leadingZeros..];
@@ -104,7 +104,6 @@ public sealed partial class Base58<TAlphabet>
     private int EncodeGenericToBytes(ReadOnlySpan<byte> data, Span<byte> destination)
     {
         int leadingZeros = Base58.CountLeadingZeros(data);
-        byte firstByte = (byte)TAlphabet.FirstCharacter;
 
         if (leadingZeros == data.Length)
         {
@@ -113,6 +112,7 @@ public sealed partial class Base58<TAlphabet>
                 ThrowHelper.ThrowDestinationTooSmall(nameof(destination));
             }
 
+            var firstByte = TAlphabet.FirstCharacter;
             destination[..leadingZeros].Fill(firstByte);
             return leadingZeros;
         }
@@ -201,7 +201,7 @@ public sealed partial class Base58<TAlphabet>
         Debug.Assert(skip >= 0, "rawLeadingZeros should always be >= inLeadingZeros by Base58 math");
         int digitCount = Base58BitcoinTables.Raw58Sz32 - rawLeadingZeros;
 
-        var state = new EncodeState(rawBase58, rawLeadingZeros, digitCount, Base58BitcoinTables.BitcoinChars, '1', inLeadingZeros);
+        var state = new EncodeState(rawBase58, rawLeadingZeros, digitCount, Base58BitcoinTables.BitcoinChars, (byte)'1', inLeadingZeros);
         return string.Create(state.OutputLength, state, static (span, s) => s.EmitForward(span));
     }
 
@@ -234,7 +234,7 @@ public sealed partial class Base58<TAlphabet>
             ThrowHelper.ThrowDestinationTooSmall(nameof(destination));
         }
 
-        var state = new EncodeState(rawBase58, rawLeadingZeros, digitCount, Base58BitcoinTables.BitcoinChars, '1', inLeadingZeros);
+        var state = new EncodeState(rawBase58, rawLeadingZeros, digitCount, Base58BitcoinTables.BitcoinChars, (byte)'1', inLeadingZeros);
         state.EmitForward(destination);
         return outputLength;
     }
@@ -310,7 +310,7 @@ public sealed partial class Base58<TAlphabet>
         Debug.Assert(skip >= 0, "rawLeadingZeros should always be >= inLeadingZeros by Base58 math");
         int digitCount = Base58BitcoinTables.Raw58Sz64 - rawLeadingZeros;
 
-        var state = new EncodeState(rawBase58, rawLeadingZeros, digitCount, Base58BitcoinTables.BitcoinChars, '1', inLeadingZeros);
+        var state = new EncodeState(rawBase58, rawLeadingZeros, digitCount, Base58BitcoinTables.BitcoinChars, (byte)'1', inLeadingZeros);
         return string.Create(state.OutputLength, state, static (span, s) => s.EmitForward(span));
     }
 
@@ -343,7 +343,7 @@ public sealed partial class Base58<TAlphabet>
             ThrowHelper.ThrowDestinationTooSmall(nameof(destination));
         }
 
-        var state = new EncodeState(rawBase58, rawLeadingZeros, digitCount, Base58BitcoinTables.BitcoinChars, '1', inLeadingZeros);
+        var state = new EncodeState(rawBase58, rawLeadingZeros, digitCount, Base58BitcoinTables.BitcoinChars, (byte)'1', inLeadingZeros);
         state.EmitForward(destination);
         return outputLength;
     }
@@ -421,18 +421,18 @@ public sealed partial class Base58<TAlphabet>
     private readonly ref struct EncodeState
     {
         public readonly ReadOnlySpan<byte> Digits;
-        public readonly ReadOnlySpan<char> Alphabet;
+        public readonly ReadOnlySpan<byte> Alphabet;
         public readonly int DigitStart;
         public readonly int DigitCount;
-        public readonly char LeadingFill;
+        public readonly byte LeadingFill;
         public readonly int LeadingCount;
 
         public EncodeState(
             ReadOnlySpan<byte> digits,
             int digitStart,
             int digitCount,
-            ReadOnlySpan<char> alphabet,
-            char leadingFill,
+            ReadOnlySpan<byte> alphabet,
+            byte leadingFill,
             int leadingCount)
         {
             Digits = digits;
@@ -450,7 +450,7 @@ public sealed partial class Base58<TAlphabet>
         {
             if (LeadingCount > 0)
             {
-                destination[..LeadingCount].Fill(TChar.CreateTruncating((ushort)LeadingFill));
+                destination[..LeadingCount].Fill(TChar.CreateTruncating(LeadingFill));
             }
 
             int index = LeadingCount;
@@ -466,7 +466,7 @@ public sealed partial class Base58<TAlphabet>
         {
             if (LeadingCount > 0)
             {
-                destination[..LeadingCount].Fill(TChar.CreateTruncating((ushort)LeadingFill));
+                destination[..LeadingCount].Fill(TChar.CreateTruncating(LeadingFill));
             }
 
             int index = LeadingCount;

@@ -159,7 +159,7 @@ public class JaggedVsMultidimensionalArrayBenchmark
             for (int i = 0; i < state.OutputLength - state.InLeadingZeros; i++)
             {
                 byte digit = state.RawBase58[state.RawLeadingZeros + i];
-                span[state.InLeadingZeros + i] = bitcoinChars[digit];
+                span[state.InLeadingZeros + i] = (char)bitcoinChars[digit];
             }
         });
     }
@@ -236,7 +236,7 @@ public class JaggedVsMultidimensionalArrayBenchmark
             for (int i = 0; i < state.OutputLength - state.InLeadingZeros; i++)
             {
                 byte digit = state.RawBase58[state.RawLeadingZeros + i];
-                span[state.InLeadingZeros + i] = bitcoinChars[digit];
+                span[state.InLeadingZeros + i] = (char)bitcoinChars[digit];
             }
         });
     }

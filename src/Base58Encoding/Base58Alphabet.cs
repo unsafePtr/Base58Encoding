@@ -2,8 +2,8 @@ namespace Base58Encoding;
 
 public readonly struct BitcoinAlphabet : IBase58Alphabet
 {
-    public static ReadOnlySpan<char> Characters => "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
-    public static char FirstCharacter => '1';
+    public static ReadOnlySpan<byte> Characters => "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"u8;
+    public static byte FirstCharacter => (byte)'1';
     public static ReadOnlySpan<byte> DecodeTable =>
     [
         255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
@@ -19,8 +19,8 @@ public readonly struct BitcoinAlphabet : IBase58Alphabet
 
 public readonly struct RippleAlphabet : IBase58Alphabet
 {
-    public static ReadOnlySpan<char> Characters => "rpshnaf39wBUDNEGHJKLM4PQRST7VWXYZ2bcdeCg65jkm8oFqi1tuvAxyz";
-    public static char FirstCharacter => 'r';
+    public static ReadOnlySpan<byte> Characters => "rpshnaf39wBUDNEGHJKLM4PQRST7VWXYZ2bcdeCg65jkm8oFqi1tuvAxyz"u8;
+    public static byte FirstCharacter => (byte)'r';
     public static ReadOnlySpan<byte> DecodeTable =>
     [
         255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
@@ -36,8 +36,8 @@ public readonly struct RippleAlphabet : IBase58Alphabet
 
 public readonly struct FlickrAlphabet : IBase58Alphabet
 {
-    public static ReadOnlySpan<char> Characters => "123456789abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ";
-    public static char FirstCharacter => '1';
+    public static ReadOnlySpan<byte> Characters => "123456789abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ"u8;
+    public static byte FirstCharacter => (byte)'1';
     public static ReadOnlySpan<byte> DecodeTable =>
     [
         255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
