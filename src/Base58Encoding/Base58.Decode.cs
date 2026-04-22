@@ -112,7 +112,7 @@ public partial class Base58
         where TChar : unmanaged, IBinaryInteger<TChar>
     {
         TChar firstChar = TChar.CreateTruncating((ushort)_firstCharacter);
-        int leadingOnes = CountLeading(encoded, firstChar);
+        int leadingOnes = CountLeadingCharacters(encoded, firstChar);
         int scratchSize = encoded.Length * 733 / 1000 + 1;
 
         if (scratchSize <= MaxStackallocByte)
@@ -158,7 +158,7 @@ public partial class Base58
         where TChar : unmanaged, IBinaryInteger<TChar>
     {
         TChar firstChar = TChar.CreateTruncating((ushort)_firstCharacter);
-        int leadingOnes = CountLeading(encoded, firstChar);
+        int leadingOnes = CountLeadingCharacters(encoded, firstChar);
 
         if (leadingOnes == encoded.Length)
         {
@@ -247,13 +247,6 @@ public partial class Base58
         }
     }
 
-    private static int CountLeading<TChar>(ReadOnlySpan<TChar> text, TChar target)
-        where TChar : unmanaged, IBinaryInteger<TChar>
-    {
-        int mismatchIndex = text.IndexOfAnyExcept(target);
-        return mismatchIndex == -1 ? text.Length : mismatchIndex;
-    }
-
     /// <summary>
     /// Returns bytes written (32) on success, or -1 if the encoded input doesn't
     /// represent exactly 32 bytes (caller should fall back to generic decode).
@@ -335,7 +328,7 @@ public partial class Base58
         }
 
         TChar one = TChar.CreateTruncating((ushort)'1');
-        int inputLeadingOnes = CountLeading(encoded, one);
+        int inputLeadingOnes = CountLeadingCharacters(encoded, one);
 
         if (outputLeadingZeros != inputLeadingOnes)
         {
@@ -431,7 +424,7 @@ public partial class Base58
         }
 
         TChar one = TChar.CreateTruncating((ushort)'1');
-        int inputLeadingOnes = CountLeading(encoded, one);
+        int inputLeadingOnes = CountLeadingCharacters(encoded, one);
 
         if (outputLeadingZeros != inputLeadingOnes)
         {
