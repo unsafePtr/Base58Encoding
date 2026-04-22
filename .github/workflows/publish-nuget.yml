@@ -7,14 +7,20 @@ on:
     branches: [ master, main ]
     paths:
       - 'src/Base58Encoding/**'
-      - '!src/Base58Encoding.Tests/**'
-      - '!src/Base58Encoding.Benchmarks/**'
+      - 'src/Directory.Build.props'
+      - 'src/Directory.Packages.props'
+      - 'src/NuGet.Config'
+      - 'src/PACKAGE.md'
+      - 'global.json'
   pull_request:
     branches: [ master, main ]
     paths:
       - 'src/Base58Encoding/**'
-      - '!src/Base58Encoding.Tests/**'
-      - '!src/Base58Encoding.Benchmarks/**'
+      - 'src/Directory.Build.props'
+      - 'src/Directory.Packages.props'
+      - 'src/NuGet.Config'
+      - 'src/PACKAGE.md'
+      - 'global.json'
   workflow_dispatch:
     inputs:
       version:
@@ -84,7 +90,7 @@ jobs:
         path: ./artifacts
         
     - name: Setup .NET
-      uses: actions/setup-dotnet@v5
+      uses: actions/setup-dotnet@v4
       with:
         dotnet-version: 10.0.x
         
