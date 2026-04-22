@@ -13,7 +13,7 @@
     <PackageProjectUrl>https://github.com/unsafePtr/Base58Encoding</PackageProjectUrl>
     <RepositoryUrl>https://github.com/unsafePtr/Base58Encoding</RepositoryUrl>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageReadmeFile>PACKAGE.md</PackageReadmeFile>
     <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
   </PropertyGroup>
 
@@ -29,7 +29,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="..\..\README.md" Pack="true" PackagePath="\"/>
+    <None Include="..\..\PACKAGE.md" Pack="true" PackagePath="\"/>
   </ItemGroup>
 
 </Project>
