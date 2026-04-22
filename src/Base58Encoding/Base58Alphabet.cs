@@ -1,6 +1,6 @@
 namespace Base58Encoding;
 
-public class Base58Alphabet
+internal class Base58Alphabet
 {
     public const string BitcoinAlphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
     public const string RippleAlphabet = "rpshnaf39wBUDNEGHJKLM4PQRST7VWXYZ2bcdeCg65jkm8oFqi1tuvAxyz";
