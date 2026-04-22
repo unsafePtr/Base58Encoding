@@ -12,20 +12,50 @@ A .NET 10.0 Base58 encoding and decoding library with support for multiple alpha
 
 ## Usage
 
+### Allocating API
+
 ```csharp
 using Base58Encoding;
 
-// Encode bytes to Base58 Bitcoin(IFPS/Sui) alphabet
+// Encode bytes to Base58 string (Bitcoin / IPFS / Sui / Solana alphabet)
 byte[] data = { 0x01, 0x02, 0x03, 0x04 };
 string encoded = Base58.Bitcoin.Encode(data);
 
 // Decode Base58 string back to bytes
 byte[] decoded = Base58.Bitcoin.Decode(encoded);
 
-// Ripple / Flickr
+// Ripple / Flickr alphabets
 Base58.Ripple.Encode(data);
 Base58.Flickr.Encode(data);
 ```
+
+### Zero-allocation API
+
+Encode or decode directly into a caller-owned buffer — no heap allocations on the hot path.
+
+```csharp
+using Base58Encoding;
+
+byte[] data = { 0x01, 0x02, 0x03, 0x04 };
+
+// Size the output buffer using the helper
+int maxLen = Base58.GetEncodedLength(data.Length);
+Span<byte> encodedBytes = stackalloc byte[maxLen]; // or rent from ArrayPool
+
+int written = Base58.Bitcoin.Encode(data, encodedBytes);
+ReadOnlySpan<byte> result = encodedBytes[..written]; // ASCII bytes
+
+// Decode from a char span or ASCII byte span into a caller-owned buffer
+Span<byte> decodedBytes = stackalloc byte[Base58.GetTypicalDecodedLength(written)];
+int decodedLen = Base58.Bitcoin.Decode(result, decodedBytes);
+
+// Both Decode overloads are supported:
+//   int Decode(ReadOnlySpan<char>  encoded, Span<byte> destination)
+//   int Decode(ReadOnlySpan<byte>  encoded, Span<byte> destination)
+```
+
+`GetEncodedLength(byteCount)` returns a safe upper bound for the encoded output size.  
+`GetTypicalDecodedLength(encodedLength)` returns a typical upper bound for decoded output (see its XML doc for the edge case around leading `'1'` characters).
 
 ## Performance
 
