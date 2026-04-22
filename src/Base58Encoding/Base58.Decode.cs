@@ -26,7 +26,7 @@ public sealed partial class Base58<TAlphabet>
             if (encoded.Length is >= 43 and <= 44)
             {
                 Span<byte> buf = stackalloc byte[32];
-                if (TryDecodeBitcoin32Fast<char>(encoded, buf) == 32)
+                if (TryDecodeBitcoin32Fast(encoded, buf) == 32)
                 {
                     return buf.ToArray();
                 }
@@ -34,14 +34,14 @@ public sealed partial class Base58<TAlphabet>
             else if (encoded.Length is >= 87 and <= 88)
             {
                 Span<byte> buf = stackalloc byte[64];
-                if (TryDecodeBitcoin64Fast<char>(encoded, buf) == 64)
+                if (TryDecodeBitcoin64Fast(encoded, buf) == 64)
                 {
                     return buf.ToArray();
                 }
             }
         }
 
-        return DecodeGenericToArray<char>(encoded);
+        return DecodeGenericToArray(encoded);
     }
 
     /// <summary>
@@ -126,6 +126,7 @@ public sealed partial class Base58<TAlphabet>
             {
                 ThrowHelper.ThrowDestinationTooSmall(nameof(destination));
             }
+
             EmitGenericDecode(destination, leadingOnes, decoded, actualDecodedLength);
             return totalLength;
         }
@@ -146,6 +147,7 @@ public sealed partial class Base58<TAlphabet>
             {
                 ThrowHelper.ThrowDestinationTooSmall(nameof(destination));
             }
+
             EmitGenericDecode(destination, leadingOnes, rented, actualDecodedLength);
             return totalLength;
         }
@@ -260,9 +262,11 @@ public sealed partial class Base58<TAlphabet>
     {
         int charCount = encoded.Length;
 
+        // Convert to raw base58 digits with validation + conversion in one pass
         Span<byte> rawBase58 = stackalloc byte[Base58BitcoinTables.Raw58Sz32];
         ReadOnlySpan<byte> bitcoinDecodeTable = BitcoinAlphabet.DecodeTable;
 
+        // Prepend zeros to make exactly Raw58Sz32 characters
         int prepend0 = Base58BitcoinTables.Raw58Sz32 - charCount;
         for (int j = 0; j < Base58BitcoinTables.Raw58Sz32; j++)
         {
@@ -273,6 +277,7 @@ public sealed partial class Base58<TAlphabet>
             else
             {
                 int c = int.CreateTruncating(encoded[j - prepend0]);
+                // Validate + convert using Bitcoin decode table
                 if ((uint)c >= 128 || bitcoinDecodeTable[c] == 255)
                 {
                     ThrowHelper.ThrowInvalidCharacter((char)c);
@@ -282,17 +287,19 @@ public sealed partial class Base58<TAlphabet>
             }
         }
 
+        // Convert to intermediate format (base 58^5)
         Span<ulong> intermediate = stackalloc ulong[Base58BitcoinTables.IntermediateSz32];
 
         for (int i = 0; i < Base58BitcoinTables.IntermediateSz32; i++)
         {
-            intermediate[i] = (ulong)rawBase58[5 * i + 0] * 11316496UL +
-                              (ulong)rawBase58[5 * i + 1] * 195112UL +
-                              (ulong)rawBase58[5 * i + 2] * 3364UL +
-                              (ulong)rawBase58[5 * i + 3] * 58UL +
-                              (ulong)rawBase58[5 * i + 4] * 1UL;
+            intermediate[i] = (ulong)rawBase58[5 * i + 0] * 11316496UL +   // 58^4
+                              (ulong)rawBase58[5 * i + 1] * 195112UL +      // 58^3
+                              (ulong)rawBase58[5 * i + 2] * 3364UL +        // 58^2
+                              (ulong)rawBase58[5 * i + 3] * 58UL +          // 58^1
+                              (ulong)rawBase58[5 * i + 4] * 1UL;            // 58^0
         }
 
+        // Convert to overcomplete base 2^32 using decode table
         Span<ulong> binary = stackalloc ulong[Base58BitcoinTables.BinarySz32];
 
         for (int j = 0; j < Base58BitcoinTables.BinarySz32; j++)
@@ -305,19 +312,21 @@ public sealed partial class Base58<TAlphabet>
             binary[j] = acc;
         }
 
+        // Reduce each term to less than 2^32
         for (int i = Base58BitcoinTables.BinarySz32 - 1; i > 0; i--)
         {
             binary[i - 1] += binary[i] >> 32;
             binary[i] &= 0xFFFFFFFFUL;
         }
 
+        // Check if the result is too large for 32 bytes
         if (binary[0] > 0xFFFFFFFFUL)
         {
             return -1;
         }
 
-        // Count leading zero BYTES in the 32-byte output directly from binary[]
-        // without materializing the output. Each limb is 4 bytes big-endian.
+        // Count leading zero bytes in the output directly from binary[] without materializing it.
+        // Each limb is 4 bytes big-endian.
         int outputLeadingZeros = 0;
         for (int i = 0; i < Base58BitcoinTables.BinarySz32; i++)
         {
@@ -330,6 +339,8 @@ public sealed partial class Base58<TAlphabet>
             outputLeadingZeros += 4;
         }
 
+        // Leading zeros in output must match leading '1's in input.
+        // Mismatch means this encoded string doesn't represent exactly 32 bytes.
         TChar one = TChar.CreateTruncating((byte)'1');
         int inputLeadingOnes = Base58.CountLeadingCharacters(encoded, one);
 
@@ -343,6 +354,7 @@ public sealed partial class Base58<TAlphabet>
             ThrowHelper.ThrowDestinationTooSmall(nameof(destination));
         }
 
+        // Convert to big-endian byte output
         for (int i = 0; i < Base58BitcoinTables.BinarySz32; i++)
         {
             uint value = (uint)binary[i];
@@ -359,9 +371,11 @@ public sealed partial class Base58<TAlphabet>
     {
         int charCount = encoded.Length;
 
+        // Convert to raw base58 digits with validation + conversion in one pass
         Span<byte> rawBase58 = stackalloc byte[Base58BitcoinTables.Raw58Sz64];
         ReadOnlySpan<byte> bitcoinDecodeTable = BitcoinAlphabet.DecodeTable;
 
+        // Prepend zeros to make exactly Raw58Sz64 characters
         int prepend0 = Base58BitcoinTables.Raw58Sz64 - charCount;
         for (int j = 0; j < Base58BitcoinTables.Raw58Sz64; j++)
         {
@@ -372,6 +386,7 @@ public sealed partial class Base58<TAlphabet>
             else
             {
                 int c = int.CreateTruncating(encoded[j - prepend0]);
+                // Validate + convert using Bitcoin decode table
                 if ((uint)c >= 128 || bitcoinDecodeTable[c] == 255)
                 {
                     ThrowHelper.ThrowInvalidCharacter((char)c);
@@ -381,17 +396,19 @@ public sealed partial class Base58<TAlphabet>
             }
         }
 
+        // Convert to intermediate format (base 58^5)
         Span<ulong> intermediate = stackalloc ulong[Base58BitcoinTables.IntermediateSz64];
 
         for (int i = 0; i < Base58BitcoinTables.IntermediateSz64; i++)
         {
-            intermediate[i] = (ulong)rawBase58[5 * i + 0] * 11316496UL +
-                              (ulong)rawBase58[5 * i + 1] * 195112UL +
-                              (ulong)rawBase58[5 * i + 2] * 3364UL +
-                              (ulong)rawBase58[5 * i + 3] * 58UL +
-                              (ulong)rawBase58[5 * i + 4] * 1UL;
+            intermediate[i] = (ulong)rawBase58[5 * i + 0] * 11316496UL +   // 58^4
+                              (ulong)rawBase58[5 * i + 1] * 195112UL +      // 58^3
+                              (ulong)rawBase58[5 * i + 2] * 3364UL +        // 58^2
+                              (ulong)rawBase58[5 * i + 3] * 58UL +          // 58^1
+                              (ulong)rawBase58[5 * i + 4] * 1UL;            // 58^0
         }
 
+        // Convert to overcomplete base 2^32 using decode table
         Span<ulong> binary = stackalloc ulong[Base58BitcoinTables.BinarySz64];
 
         for (int j = 0; j < Base58BitcoinTables.BinarySz64; j++)
@@ -404,17 +421,21 @@ public sealed partial class Base58<TAlphabet>
             binary[j] = acc;
         }
 
+        // Reduce each term to less than 2^32
         for (int i = Base58BitcoinTables.BinarySz64 - 1; i > 0; i--)
         {
             binary[i - 1] += binary[i] >> 32;
             binary[i] &= 0xFFFFFFFFUL;
         }
 
+        // Check if the result is too large for 64 bytes
         if (binary[0] > 0xFFFFFFFFUL)
         {
             return -1;
         }
 
+        // Count leading zero bytes in the output directly from binary[] without materializing it.
+        // Each limb is 4 bytes big-endian.
         int outputLeadingZeros = 0;
         for (int i = 0; i < Base58BitcoinTables.BinarySz64; i++)
         {
@@ -427,6 +448,8 @@ public sealed partial class Base58<TAlphabet>
             outputLeadingZeros += 4;
         }
 
+        // Leading zeros in output must match leading '1's in input.
+        // Mismatch means this encoded string doesn't represent exactly 64 bytes.
         TChar one = TChar.CreateTruncating((byte)'1');
         int inputLeadingOnes = Base58.CountLeadingCharacters(encoded, one);
 
@@ -440,6 +463,7 @@ public sealed partial class Base58<TAlphabet>
             ThrowHelper.ThrowDestinationTooSmall(nameof(destination));
         }
 
+        // Convert to big-endian byte output
         for (int i = 0; i < Base58BitcoinTables.BinarySz64; i++)
         {
             uint value = (uint)binary[i];
