@@ -15,9 +15,7 @@ public class ZeroAllocBenchmark
 
     [Params(
         TestVectors.VectorType.BitcoinAddress,
-        TestVectors.VectorType.SolanaAddress,
-        TestVectors.VectorType.SolanaTx,
-        TestVectors.VectorType.MoneroAddress
+        TestVectors.VectorType.SolanaAddress
     )]
     public TestVectors.VectorType VectorType { get; set; }
 
