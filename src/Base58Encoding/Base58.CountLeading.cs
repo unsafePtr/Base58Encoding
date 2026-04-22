@@ -5,7 +5,7 @@ using System.Runtime.Intrinsics;
 
 namespace Base58Encoding;
 
-public partial class Base58
+public static partial class Base58
 {
     internal static int CountLeadingZeros(ReadOnlySpan<byte> data)
     {
@@ -84,10 +84,10 @@ public partial class Base58
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal static int CountLeadingCharacters(ReadOnlySpan<char> text, char target)
+    internal static int CountLeadingCharacters<TChar>(ReadOnlySpan<TChar> text, TChar target)
+        where TChar : unmanaged, IBinaryInteger<TChar>
     {
         int mismatchIndex = text.IndexOfAnyExcept(target);
-
         return mismatchIndex == -1 ? text.Length : mismatchIndex;
     }
 }

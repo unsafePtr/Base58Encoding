@@ -7,14 +7,20 @@ on:
     branches: [ master, main ]
     paths:
       - 'src/Base58Encoding/**'
-      - '!src/Base58Encoding.Tests/**'
-      - '!src/Base58Encoding.Benchmarks/**'
+      - 'src/Directory.Build.props'
+      - 'src/Directory.Packages.props'
+      - 'src/NuGet.Config'
+      - 'src/PACKAGE.md'
+      - 'global.json'
   pull_request:
     branches: [ master, main ]
     paths:
       - 'src/Base58Encoding/**'
-      - '!src/Base58Encoding.Tests/**'
-      - '!src/Base58Encoding.Benchmarks/**'
+      - 'src/Directory.Build.props'
+      - 'src/Directory.Packages.props'
+      - 'src/NuGet.Config'
+      - 'src/PACKAGE.md'
+      - 'global.json'
   workflow_dispatch:
     inputs:
       version:
@@ -43,7 +49,7 @@ jobs:
       run: echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_ENV
     
     - name: Setup .NET
-      uses: actions/setup-dotnet@v4
+      uses: actions/setup-dotnet@v5
       with:
         dotnet-version: 10.0.x
         

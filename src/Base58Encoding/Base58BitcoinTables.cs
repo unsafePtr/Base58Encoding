@@ -9,7 +9,7 @@ internal static class Base58BitcoinTables
     internal const byte InverseTableOffset = (byte)'1'; // Characters are offset by '1'
 
     // Bitcoin alphabet for fast character mapping
-    internal static ReadOnlySpan<char> BitcoinChars => "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+    internal static ReadOnlySpan<byte> BitcoinChars => "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"u8;
 
     // Constants for 32-byte encoding/decoding (from Firedancer)
     internal const int BinarySz32 = 8;

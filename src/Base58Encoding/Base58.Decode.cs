@@ -1,107 +1,270 @@
+using System.Buffers;
 using System.Buffers.Binary;
+using System.Numerics;
+using System.Runtime.CompilerServices;
 
 namespace Base58Encoding;
 
-public partial class Base58
+public sealed partial class Base58<TAlphabet>
+    where TAlphabet : struct, IBase58Alphabet
 {
     /// <summary>
-    /// Decode Base58 string to byte array
+    /// Decodes a Base58 string to a new byte array.
     /// </summary>
-    /// <param name="encoded">Base58 encoded string</param>
-    /// <returns>Decoded byte array</returns>
-    /// <exception cref="ArgumentException">Invalid Base58 character</exception>
+    /// <param name="encoded">Base58 encoded input.</param>
+    /// <returns>Decoded byte array.</returns>
+    /// <exception cref="ArgumentException">Invalid Base58 character.</exception>
     public byte[] Decode(ReadOnlySpan<char> encoded)
     {
         if (encoded.IsEmpty)
-            return [];
-
-        // Hot path for Bitcoin alphabet + common expected output sizes
-        if (ReferenceEquals(this, _bitcoin.Value))
         {
-            // Only use fast decode for lengths that STRONGLY suggest fixed sizes
-            // These are the maximum-length encodings that are very likely to be exactly 32/64 bytes
-            return encoded.Length switch
-            {
-                >= 43 and <= 44 => DecodeBitcoin32Fast(encoded) ?? DecodeGeneric(encoded), // Very likely 32 bytes
-                >= 87 and <= 88 => DecodeBitcoin64Fast(encoded) ?? DecodeGeneric(encoded), // Very likely 64 bytes  
-                _ => DecodeGeneric(encoded)
-            };
+            return [];
         }
 
-        // Fallback for other alphabets
-        return DecodeGeneric(encoded);
+        if (typeof(TAlphabet) == typeof(BitcoinAlphabet))
+        {
+            if (encoded.Length is >= 43 and <= 44)
+            {
+                Span<byte> buf = stackalloc byte[32];
+                if (TryDecodeBitcoin32Fast(encoded, buf) == 32)
+                {
+                    return buf.ToArray();
+                }
+            }
+            else if (encoded.Length is >= 87 and <= 88)
+            {
+                Span<byte> buf = stackalloc byte[64];
+                if (TryDecodeBitcoin64Fast(encoded, buf) == 64)
+                {
+                    return buf.ToArray();
+                }
+            }
+        }
+
+        return DecodeGenericToArray(encoded);
     }
 
     /// <summary>
-    /// Decode Base58 string to byte array using generic algorithm
+    /// Decodes Base58 chars into <paramref name="destination"/>.
     /// </summary>
-    /// <param name="encoded">Base58 encoded string</param>
-    /// <returns>Decoded byte array</returns>
-    /// <exception cref="ArgumentException">Invalid Base58 character</exception>
-    internal byte[] DecodeGeneric(ReadOnlySpan<char> encoded)
+    /// <param name="encoded">Base58 encoded input.</param>
+    /// <param name="destination">Destination buffer for decoded bytes.</param>
+    /// <returns>Number of bytes written to <paramref name="destination"/>.</returns>
+    /// <exception cref="ArgumentException">
+    /// Thrown on invalid Base58 character or when <paramref name="destination"/> is too small.
+    /// </exception>
+    public int Decode(ReadOnlySpan<char> encoded, Span<byte> destination)
     {
         if (encoded.IsEmpty)
-            return [];
+        {
+            return 0;
+        }
 
-        int leadingOnes = CountLeadingCharacters(encoded, _firstCharacter);
+        return DecodeCore(encoded, destination);
+    }
 
-        int outputSize = encoded.Length * 733 / 1000 + 1;
+    /// <summary>
+    /// Decodes Base58 ASCII bytes into <paramref name="destination"/>.
+    /// </summary>
+    /// <param name="encoded">Base58 encoded input as ASCII bytes.</param>
+    /// <param name="destination">Destination buffer for decoded bytes.</param>
+    /// <returns>Number of bytes written to <paramref name="destination"/>.</returns>
+    /// <exception cref="ArgumentException">
+    /// Thrown on invalid Base58 character or when <paramref name="destination"/> is too small.
+    /// </exception>
+    public int Decode(ReadOnlySpan<byte> encoded, Span<byte> destination)
+    {
+        if (encoded.IsEmpty)
+        {
+            return 0;
+        }
 
-        Span<byte> decoded = outputSize > MaxStackallocByte
-            ? new byte[outputSize]
-            : stackalloc byte[outputSize];
+        return DecodeCore(encoded, destination);
+    }
 
+    private int DecodeCore<TChar>(ReadOnlySpan<TChar> encoded, Span<byte> destination)
+        where TChar : unmanaged, IBinaryInteger<TChar>
+    {
+        if (typeof(TAlphabet) == typeof(BitcoinAlphabet))
+        {
+            if (encoded.Length is >= 43 and <= 44)
+            {
+                int r = TryDecodeBitcoin32Fast(encoded, destination);
+                if (r >= 0)
+                {
+                    return r;
+                }
+            }
+            else if (encoded.Length is >= 87 and <= 88)
+            {
+                int r = TryDecodeBitcoin64Fast(encoded, destination);
+                if (r >= 0)
+                {
+                    return r;
+                }
+            }
+        }
+
+        return DecodeGenericCore(encoded, destination);
+    }
+
+    [SkipLocalsInit]
+    private int DecodeGenericCore<TChar>(ReadOnlySpan<TChar> encoded, Span<byte> destination)
+        where TChar : unmanaged, IBinaryInteger<TChar>
+    {
+        TChar firstChar = TChar.CreateTruncating(TAlphabet.FirstCharacter);
+        int leadingOnes = Base58.CountLeadingCharacters(encoded, firstChar);
+        int scratchSize = encoded.Length * 733 / 1000 + 1;
+
+        if (scratchSize <= MaxStackallocByte)
+        {
+            Span<byte> decoded = stackalloc byte[scratchSize];
+            int decodedLength = ComputeGenericDecode(encoded, leadingOnes, decoded);
+            int actualDecodedLength = leadingOnes == encoded.Length ? 0 : decodedLength;
+            int totalLength = leadingOnes + actualDecodedLength;
+            if (destination.Length < totalLength)
+            {
+                ThrowHelper.ThrowDestinationTooSmall(nameof(destination));
+            }
+
+            EmitGenericDecode(destination, leadingOnes, decoded, actualDecodedLength);
+            return totalLength;
+        }
+
+        return DecodeGenericCoreLarge(encoded, leadingOnes, scratchSize, destination);
+    }
+
+    private int DecodeGenericCoreLarge<TChar>(ReadOnlySpan<TChar> encoded, int leadingOnes, int scratchSize, Span<byte> destination)
+        where TChar : unmanaged, IBinaryInteger<TChar>
+    {
+        byte[] rented = ArrayPool<byte>.Shared.Rent(scratchSize);
+        try
+        {
+            int decodedLength = ComputeGenericDecode(encoded, leadingOnes, rented);
+            int actualDecodedLength = leadingOnes == encoded.Length ? 0 : decodedLength;
+            int totalLength = leadingOnes + actualDecodedLength;
+            if (destination.Length < totalLength)
+            {
+                ThrowHelper.ThrowDestinationTooSmall(nameof(destination));
+            }
+
+            EmitGenericDecode(destination, leadingOnes, rented, actualDecodedLength);
+            return totalLength;
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(rented);
+        }
+    }
+
+    [SkipLocalsInit]
+    private byte[] DecodeGenericToArray<TChar>(ReadOnlySpan<TChar> encoded)
+        where TChar : unmanaged, IBinaryInteger<TChar>
+    {
+        TChar firstChar = TChar.CreateTruncating(TAlphabet.FirstCharacter);
+        int leadingOnes = Base58.CountLeadingCharacters(encoded, firstChar);
+
+        if (leadingOnes == encoded.Length)
+        {
+            return new byte[leadingOnes];
+        }
+
+        int scratchSize = encoded.Length * 733 / 1000 + 1;
+
+        if (scratchSize <= MaxStackallocByte)
+        {
+            Span<byte> decoded = stackalloc byte[scratchSize];
+            int decodedLength = ComputeGenericDecode(encoded, leadingOnes, decoded);
+            byte[] result = new byte[leadingOnes + decodedLength];
+            EmitGenericDecode(result, leadingOnes, decoded, decodedLength);
+            return result;
+        }
+
+        return DecodeGenericToArrayLarge(encoded, leadingOnes, scratchSize);
+    }
+
+    private byte[] DecodeGenericToArrayLarge<TChar>(ReadOnlySpan<TChar> encoded, int leadingOnes, int scratchSize)
+        where TChar : unmanaged, IBinaryInteger<TChar>
+    {
+        byte[] rented = ArrayPool<byte>.Shared.Rent(scratchSize);
+        try
+        {
+            int decodedLength = ComputeGenericDecode(encoded, leadingOnes, rented);
+            byte[] result = new byte[leadingOnes + decodedLength];
+            EmitGenericDecode(result, leadingOnes, rented, decodedLength);
+            return result;
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(rented);
+        }
+    }
+
+    private int ComputeGenericDecode<TChar>(ReadOnlySpan<TChar> encoded, int leadingOnes, Span<byte> digits)
+        where TChar : unmanaged, IBinaryInteger<TChar>
+    {
         int decodedLength = 1;
-        decoded[0] = 0;
+        digits[0] = 0;
 
-        var decodeTable = _decodeTable.Span;
+        ReadOnlySpan<byte> decodeTable = TAlphabet.DecodeTable;
 
         for (int i = leadingOnes; i < encoded.Length; i++)
         {
-            char c = encoded[i];
+            int c = int.CreateTruncating(encoded[i]);
 
-            if (c >= 128 || decodeTable[c] == 255)
-                ThrowHelper.ThrowInvalidCharacter(c);
+            if ((uint)c >= 128 || decodeTable[c] == 255)
+            {
+                ThrowHelper.ThrowInvalidCharacter((char)c);
+            }
 
             int carry = decodeTable[c];
 
             for (int j = 0; j < decodedLength; j++)
             {
-                carry += decoded[j] * Base;
-                decoded[j] = (byte)(carry & 0xFF);
+                carry += digits[j] * Base;
+                digits[j] = (byte)(carry & 0xFF);
                 carry >>= 8;
             }
 
             while (carry > 0)
             {
-                decoded[decodedLength++] = (byte)(carry & 0xFF);
+                digits[decodedLength++] = (byte)(carry & 0xFF);
                 carry >>= 8;
             }
         }
 
-        // If we only have leading ones and no other digits were processed,
-        // we should only return the leading zeros (not add an extra byte)
-        int actualDecodedLength = (leadingOnes == encoded.Length) ? 0 : decodedLength;
-
-        var result = new byte[leadingOnes + actualDecodedLength];
-
-        if (actualDecodedLength > 0)
-        {
-            var finalDecoded = decoded.Slice(0, decodedLength);
-            finalDecoded.Reverse();
-            finalDecoded.CopyTo(result.AsSpan(leadingOnes));
-        }
-
-        return result;
+        return decodedLength;
     }
 
-    internal static byte[]? DecodeBitcoin32Fast(ReadOnlySpan<char> encoded)
+    private static void EmitGenericDecode(Span<byte> destination, int leadingOnes, Span<byte> digits, int decodedLength)
+    {
+        if (leadingOnes > 0)
+        {
+            destination[..leadingOnes].Clear();
+        }
+
+        if (decodedLength > 0)
+        {
+            Span<byte> finalDecoded = digits[..decodedLength];
+            finalDecoded.Reverse();
+            finalDecoded.CopyTo(destination[leadingOnes..]);
+        }
+    }
+
+    /// <summary>
+    /// Returns bytes written (32) on success, or -1 if the encoded input doesn't
+    /// represent exactly 32 bytes (caller should fall back to generic decode).
+    /// Throws on invalid character or insufficient destination when fast path matches.
+    /// </summary>
+    [SkipLocalsInit]
+    internal static int TryDecodeBitcoin32Fast<TChar>(ReadOnlySpan<TChar> encoded, Span<byte> destination)
+        where TChar : unmanaged, IBinaryInteger<TChar>
     {
         int charCount = encoded.Length;
 
         // Convert to raw base58 digits with validation + conversion in one pass
-        Span<byte> rawBase58 = stackalloc byte[Base58BitcoinTables.Raw58Sz32]; // 45 bytes
-        var bitcoinDecodeTable = Base58Alphabet.Bitcoin.DecodeTable.Span;
+        Span<byte> rawBase58 = stackalloc byte[Base58BitcoinTables.Raw58Sz32];
+        ReadOnlySpan<byte> bitcoinDecodeTable = BitcoinAlphabet.DecodeTable;
 
         // Prepend zeros to make exactly Raw58Sz32 characters
         int prepend0 = Base58BitcoinTables.Raw58Sz32 - charCount;
@@ -113,10 +276,12 @@ public partial class Base58
             }
             else
             {
-                char c = encoded[j - prepend0];
+                int c = int.CreateTruncating(encoded[j - prepend0]);
                 // Validate + convert using Bitcoin decode table
-                if (c >= 128 || bitcoinDecodeTable[c] == 255)
-                    ThrowHelper.ThrowInvalidCharacter(c);
+                if ((uint)c >= 128 || bitcoinDecodeTable[c] == 255)
+                {
+                    ThrowHelper.ThrowInvalidCharacter((char)c);
+                }
 
                 rawBase58[j] = bitcoinDecodeTable[c];
             }
@@ -128,10 +293,10 @@ public partial class Base58
         for (int i = 0; i < Base58BitcoinTables.IntermediateSz32; i++)
         {
             intermediate[i] = (ulong)rawBase58[5 * i + 0] * 11316496UL +   // 58^4
-                             (ulong)rawBase58[5 * i + 1] * 195112UL +      // 58^3  
-                             (ulong)rawBase58[5 * i + 2] * 3364UL +        // 58^2
-                             (ulong)rawBase58[5 * i + 3] * 58UL +          // 58^1
-                             (ulong)rawBase58[5 * i + 4] * 1UL;            // 58^0
+                              (ulong)rawBase58[5 * i + 1] * 195112UL +      // 58^3
+                              (ulong)rawBase58[5 * i + 2] * 3364UL +        // 58^2
+                              (ulong)rawBase58[5 * i + 3] * 58UL +          // 58^1
+                              (ulong)rawBase58[5 * i + 4] * 1UL;            // 58^0
         }
 
         // Convert to overcomplete base 2^32 using decode table
@@ -150,54 +315,65 @@ public partial class Base58
         // Reduce each term to less than 2^32
         for (int i = Base58BitcoinTables.BinarySz32 - 1; i > 0; i--)
         {
-            binary[i - 1] += (binary[i] >> 32);
+            binary[i - 1] += binary[i] >> 32;
             binary[i] &= 0xFFFFFFFFUL;
         }
 
         // Check if the result is too large for 32 bytes
-        if (binary[0] > 0xFFFFFFFFUL) return null;
+        if (binary[0] > 0xFFFFFFFFUL)
+        {
+            return -1;
+        }
+
+        // Count leading zero bytes in the output directly from binary[] without materializing it.
+        // Each limb is 4 bytes big-endian.
+        int outputLeadingZeros = 0;
+        for (int i = 0; i < Base58BitcoinTables.BinarySz32; i++)
+        {
+            uint v = (uint)binary[i];
+            if (v != 0)
+            {
+                outputLeadingZeros += BitOperations.LeadingZeroCount(v) / 8;
+                break;
+            }
+            outputLeadingZeros += 4;
+        }
+
+        // Leading zeros in output must match leading '1's in input.
+        // Mismatch means this encoded string doesn't represent exactly 32 bytes.
+        TChar one = TChar.CreateTruncating((byte)'1');
+        int inputLeadingOnes = Base58.CountLeadingCharacters(encoded, one);
+
+        if (outputLeadingZeros != inputLeadingOnes)
+        {
+            return -1;
+        }
+
+        if (destination.Length < 32)
+        {
+            ThrowHelper.ThrowDestinationTooSmall(nameof(destination));
+        }
 
         // Convert to big-endian byte output
-        var result = new byte[32];
         for (int i = 0; i < Base58BitcoinTables.BinarySz32; i++)
         {
             uint value = (uint)binary[i];
             int offset = i * sizeof(uint);
-            BinaryPrimitives.WriteUInt32BigEndian(result.AsSpan(offset, sizeof(uint)), value);
+            BinaryPrimitives.WriteUInt32BigEndian(destination.Slice(offset, sizeof(uint)), value);
         }
 
-        // Count leading zeros in output
-        int outputLeadingZeros = 0;
-        for (int i = 0; i < 32; i++)
-        {
-            if (result[i] != 0) break;
-            outputLeadingZeros++;
-        }
-
-        // Count leading '1's in input
-        int inputLeadingOnes = 0;
-        for (int i = 0; i < encoded.Length; i++)
-        {
-            if (encoded[i] != '1') break;
-            inputLeadingOnes++;
-        }
-
-        // Leading zeros in output must match leading '1's in input
-        // might be edge case since base58 of 32bytes can be between 32 and 44 characters.
-        // will be handled by generic decoder if lengths don't match
-        if (outputLeadingZeros != inputLeadingOnes) return null;
-
-        // Return the full 32 bytes - the result should always be 32 bytes for 32-byte decode
-        return result;
+        return 32;
     }
 
-    internal static byte[]? DecodeBitcoin64Fast(ReadOnlySpan<char> encoded)
+    [SkipLocalsInit]
+    internal static int TryDecodeBitcoin64Fast<TChar>(ReadOnlySpan<TChar> encoded, Span<byte> destination)
+        where TChar : unmanaged, IBinaryInteger<TChar>
     {
         int charCount = encoded.Length;
 
         // Convert to raw base58 digits with validation + conversion in one pass
         Span<byte> rawBase58 = stackalloc byte[Base58BitcoinTables.Raw58Sz64];
-        var bitcoinDecodeTable = Base58Alphabet.Bitcoin.DecodeTable.Span;
+        ReadOnlySpan<byte> bitcoinDecodeTable = BitcoinAlphabet.DecodeTable;
 
         // Prepend zeros to make exactly Raw58Sz64 characters
         int prepend0 = Base58BitcoinTables.Raw58Sz64 - charCount;
@@ -209,10 +385,12 @@ public partial class Base58
             }
             else
             {
-                char c = encoded[j - prepend0];
+                int c = int.CreateTruncating(encoded[j - prepend0]);
                 // Validate + convert using Bitcoin decode table
-                if (c >= 128 || bitcoinDecodeTable[c] == 255)
-                    ThrowHelper.ThrowInvalidCharacter(c);
+                if ((uint)c >= 128 || bitcoinDecodeTable[c] == 255)
+                {
+                    ThrowHelper.ThrowInvalidCharacter((char)c);
+                }
 
                 rawBase58[j] = bitcoinDecodeTable[c];
             }
@@ -224,10 +402,10 @@ public partial class Base58
         for (int i = 0; i < Base58BitcoinTables.IntermediateSz64; i++)
         {
             intermediate[i] = (ulong)rawBase58[5 * i + 0] * 11316496UL +   // 58^4
-                             (ulong)rawBase58[5 * i + 1] * 195112UL +      // 58^3  
-                             (ulong)rawBase58[5 * i + 2] * 3364UL +        // 58^2
-                             (ulong)rawBase58[5 * i + 3] * 58UL +          // 58^1
-                             (ulong)rawBase58[5 * i + 4] * 1UL;            // 58^0
+                              (ulong)rawBase58[5 * i + 1] * 195112UL +      // 58^3
+                              (ulong)rawBase58[5 * i + 2] * 3364UL +        // 58^2
+                              (ulong)rawBase58[5 * i + 3] * 58UL +          // 58^1
+                              (ulong)rawBase58[5 * i + 4] * 1UL;            // 58^0
         }
 
         // Convert to overcomplete base 2^32 using decode table
@@ -246,44 +424,67 @@ public partial class Base58
         // Reduce each term to less than 2^32
         for (int i = Base58BitcoinTables.BinarySz64 - 1; i > 0; i--)
         {
-            binary[i - 1] += (binary[i] >> 32);
+            binary[i - 1] += binary[i] >> 32;
             binary[i] &= 0xFFFFFFFFUL;
         }
 
         // Check if the result is too large for 64 bytes
-        if (binary[0] > 0xFFFFFFFFUL) return null;
+        if (binary[0] > 0xFFFFFFFFUL)
+        {
+            return -1;
+        }
+
+        // Count leading zero bytes in the output directly from binary[] without materializing it.
+        // Each limb is 4 bytes big-endian.
+        int outputLeadingZeros = 0;
+        for (int i = 0; i < Base58BitcoinTables.BinarySz64; i++)
+        {
+            uint v = (uint)binary[i];
+            if (v != 0)
+            {
+                outputLeadingZeros += BitOperations.LeadingZeroCount(v) / 8;
+                break;
+            }
+            outputLeadingZeros += 4;
+        }
+
+        // Leading zeros in output must match leading '1's in input.
+        // Mismatch means this encoded string doesn't represent exactly 64 bytes.
+        TChar one = TChar.CreateTruncating((byte)'1');
+        int inputLeadingOnes = Base58.CountLeadingCharacters(encoded, one);
+
+        if (outputLeadingZeros != inputLeadingOnes)
+        {
+            return -1;
+        }
+
+        if (destination.Length < 64)
+        {
+            ThrowHelper.ThrowDestinationTooSmall(nameof(destination));
+        }
 
         // Convert to big-endian byte output
-        var result = new byte[64];
         for (int i = 0; i < Base58BitcoinTables.BinarySz64; i++)
         {
             uint value = (uint)binary[i];
             int offset = i * sizeof(uint);
-            BinaryPrimitives.WriteUInt32BigEndian(result.AsSpan(offset, sizeof(uint)), value);
+            BinaryPrimitives.WriteUInt32BigEndian(destination.Slice(offset, sizeof(uint)), value);
         }
 
-        // Count leading zeros in output
-        int outputLeadingZeros = 0;
-        for (int i = 0; i < 64; i++)
-        {
-            if (result[i] != 0) break;
-            outputLeadingZeros++;
-        }
+        return 64;
+    }
 
-        // Count leading '1's in input
-        int inputLeadingOnes = 0;
-        for (int i = 0; i < encoded.Length; i++)
-        {
-            if (encoded[i] != '1') break;
-            inputLeadingOnes++;
-        }
+    internal static byte[]? DecodeBitcoin32Fast(ReadOnlySpan<char> encoded)
+    {
+        Span<byte> buffer = stackalloc byte[32];
+        int r = TryDecodeBitcoin32Fast<char>(encoded, buffer);
+        return r < 0 ? null : buffer.ToArray();
+    }
 
-        // Leading zeros in output must match leading '1's in input
-        // might be edge case since base58 of 64bytes can be between 64 and 88 characters.
-        // will be handled by generic decoder if lengths don't match
-        if (outputLeadingZeros != inputLeadingOnes) return null;
-
-        // Return the full 64 bytes - the result should always be 64 bytes for 64-byte decode
-        return result;
+    internal static byte[]? DecodeBitcoin64Fast(ReadOnlySpan<char> encoded)
+    {
+        Span<byte> buffer = stackalloc byte[64];
+        int r = TryDecodeBitcoin64Fast<char>(encoded, buffer);
+        return r < 0 ? null : buffer.ToArray();
     }
 }

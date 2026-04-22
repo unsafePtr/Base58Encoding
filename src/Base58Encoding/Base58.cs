@@ -1,26 +1,20 @@
 namespace Base58Encoding;
 
-public partial class Base58
+public static partial class Base58
 {
-    private const int Base = 58;
-    private const int MaxStackallocByte = 512;
+    public static Base58<BitcoinAlphabet> Bitcoin { get; } = new();
+    public static Base58<RippleAlphabet> Ripple { get; } = new();
+    public static Base58<FlickrAlphabet> Flickr { get; } = new();
 
-    private readonly ReadOnlyMemory<char> _characters;
-    private readonly ReadOnlyMemory<byte> _decodeTable;
-    private readonly char _firstCharacter;
+    internal static string EncodeBitcoin32Fast(ReadOnlySpan<byte> data)
+        => Base58<BitcoinAlphabet>.EncodeBitcoin32FastToString(data);
 
-    private static readonly Lazy<Base58> _bitcoin = new(() => new(Base58Alphabet.Bitcoin));
-    private static readonly Lazy<Base58> _ripple = new(() => new(Base58Alphabet.Ripple));
-    private static readonly Lazy<Base58> _flickr = new(() => new(Base58Alphabet.Flickr));
+    internal static string EncodeBitcoin64Fast(ReadOnlySpan<byte> data)
+        => Base58<BitcoinAlphabet>.EncodeBitcoin64FastToString(data);
 
-    public static Base58 Bitcoin => _bitcoin.Value;
-    public static Base58 Ripple => _ripple.Value;
-    public static Base58 Flickr => _flickr.Value;
+    internal static byte[]? DecodeBitcoin32Fast(ReadOnlySpan<char> encoded)
+        => Base58<BitcoinAlphabet>.DecodeBitcoin32Fast(encoded);
 
-    private Base58(Base58Alphabet alphabet)
-    {
-        _characters = alphabet.Characters;
-        _decodeTable = alphabet.DecodeTable;
-        _firstCharacter = alphabet.FirstCharacter;
-    }
+    internal static byte[]? DecodeBitcoin64Fast(ReadOnlySpan<char> encoded)
+        => Base58<BitcoinAlphabet>.DecodeBitcoin64Fast(encoded);
 }
