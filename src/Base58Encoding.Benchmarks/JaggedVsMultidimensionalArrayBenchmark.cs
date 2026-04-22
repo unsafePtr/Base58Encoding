@@ -23,6 +23,22 @@ public class JaggedVsMultidimensionalArrayBenchmark
     private static readonly uint[,] MultidimensionalEncodeTable32 = ConvertToMultidimensional(Base58BitcoinTables.EncodeTable32);
     private static readonly uint[,] MultidimensionalDecodeTable32 = ConvertToMultidimensional(Base58BitcoinTables.DecodeTable32);
 
+    private readonly ref struct FastEncodeState
+    {
+        public readonly ReadOnlySpan<byte> RawBase58;
+        public readonly int InLeadingZeros;
+        public readonly int RawLeadingZeros;
+        public readonly int OutputLength;
+
+        public FastEncodeState(ReadOnlySpan<byte> rawBase58, int inLeadingZeros, int rawLeadingZeros, int outputLength)
+        {
+            RawBase58 = rawBase58;
+            InLeadingZeros = inLeadingZeros;
+            RawLeadingZeros = rawLeadingZeros;
+            OutputLength = outputLength;
+        }
+    }
+
     [GlobalSetup]
     public void Setup()
     {
@@ -131,7 +147,7 @@ public class JaggedVsMultidimensionalArrayBenchmark
         // Calculate skip and final length
         int skip = rawLeadingZeros - inLeadingZeros;
         int outputLength = Base58BitcoinTables.Raw58Sz32 - skip;
-        var state = new Base58.EncodeFastState(rawBase58, inLeadingZeros, rawLeadingZeros, outputLength);
+        var state = new FastEncodeState(rawBase58, inLeadingZeros, rawLeadingZeros, outputLength);
         return string.Create(outputLength, state, static (span, state) =>
         {
             if (state.InLeadingZeros > 0)
@@ -208,7 +224,7 @@ public class JaggedVsMultidimensionalArrayBenchmark
         int skip = rawLeadingZeros - inLeadingZeros;
         int outputLength = Base58BitcoinTables.Raw58Sz32 - skip;
 
-        var state = new Base58.EncodeFastState(rawBase58, inLeadingZeros, rawLeadingZeros, outputLength);
+        var state = new FastEncodeState(rawBase58, inLeadingZeros, rawLeadingZeros, outputLength);
         return string.Create(outputLength, state, static (span, state) =>
         {
             if (state.InLeadingZeros > 0)
