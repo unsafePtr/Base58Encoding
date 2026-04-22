@@ -1,11 +1,11 @@
 <Project>
 
-  <!--
-    Solution-wide MSBuild properties for build performance.
-    Applied to all projects under this directory.
-  -->
-
   <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+
     <!-- Use hardlinks instead of physical file copies for output artifacts.
          On NTFS/ReFS this skips actual I/O and drops CopyFilesToOutputDirectory overhead. -->
     <CreateHardLinksForCopyFilesToOutputDirectoryIfPossible>true</CreateHardLinksForCopyFilesToOutputDirectoryIfPossible>
@@ -21,15 +21,8 @@
          so analysis is still enforced on every PR and main-branch build. -->
     <RunAnalyzers Condition="'$(ContinuousIntegrationBuild)' != 'true'">false</RunAnalyzers>
 
-    <!-- Code-style enforcement (IDE* rules) follows the same CI-only pattern.
-         This prevents EnforceCodeStyleInBuild from running Roslyn style analyzers
-         on every local build, which doubles Csc task time for no dev benefit. -->
+    <!-- Code-style enforcement (IDE* rules) follows the same CI-only pattern. -->
     <EnforceCodeStyleInBuild Condition="'$(ContinuousIntegrationBuild)' != 'true'">false</EnforceCodeStyleInBuild>
-
-    <!-- Suppress the NU1507 "multiple package sources, use source mapping" warning
-         across all projects. The two sources (nuget.org + Hercle) are intentional;
-         source mapping is not required for this repository. -->
-    <NoWarn>$(NoWarn);NU1507</NoWarn>
   </PropertyGroup>
 
 </Project>

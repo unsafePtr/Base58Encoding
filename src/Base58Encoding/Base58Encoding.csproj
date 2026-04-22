@@ -1,11 +1,6 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <TargetFramework>net10.0</TargetFramework>
-        <ImplicitUsings>enable</ImplicitUsings>
-        <Nullable>enable</Nullable>
-        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-
         <PackageId>Base58Encoding</PackageId>
         <Authors>Nikolay Zdravkov</Authors>
         <Description>A high-performance Base58 encoding/decoding library for .NET</Description>
