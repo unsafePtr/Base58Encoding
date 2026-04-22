@@ -95,27 +95,6 @@ Span<byte> decodedBytes = stackalloc byte[Base58.GetTypicalDecodedLength(written
 int decodedLen = Base58.Bitcoin.Decode(encodedBytes[..written], decodedBytes);
 ```
 
-### Custom alphabet
-
-Implement `IBase58Alphabet` with a `struct` to define your own character set:
-
-```csharp
-using Base58Encoding;
-
-public struct MyAlphabet : IBase58Alphabet
-{
-    private static ReadOnlySpan<byte> Chars =>
-        "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"u8;
-
-    public static ReadOnlySpan<byte> Characters => Chars;
-    public static ReadOnlySpan<byte> DecodeTable { get; } = Base58Alphabet.BuildDecodeTable(Chars);
-    public static byte FirstCharacter => (byte)'1';
-}
-
-var codec = new Base58<MyAlphabet>();
-string encoded = codec.Encode(data);
-```
-
 ## License
 
 MIT
