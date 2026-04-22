@@ -60,7 +60,7 @@ jobs:
       run: dotnet build src/Base58Encoding.slnx --configuration Release --no-restore
       
     - name: Test
-      run: dotnet test src/Base58Encoding.Tests/Base58Encoding.Tests.csproj --configuration Release --no-build --verbosity normal
+      run: dotnet test --project src/Base58Encoding.Tests/Base58Encoding.Tests.csproj --configuration Release --no-build --verbosity normal
       
     - name: Pack
       if: env.VERSION != ''
