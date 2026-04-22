@@ -13,7 +13,7 @@ A high-performance .NET 10 Base58 encoding and decoding library with support for
 
 | Property | First Character | Used By |
 |---|---|---|
-| `Base58.Bitcoin` | `1` | Bitcoin, IPFS, Solana, Sui |
+| `Base58.Bitcoin` | `1` | Bitcoin, IPFS, Solana, Sui, Monero |
 | `Base58.Ripple` | `r` | Ripple (XRP) |
 | `Base58.Flickr` | `1` | Flickr short URLs |
 
