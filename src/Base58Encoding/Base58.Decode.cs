@@ -113,34 +113,44 @@ public partial class Base58
     {
         TChar firstChar = TChar.CreateTruncating((ushort)_firstCharacter);
         int leadingOnes = CountLeading(encoded, firstChar);
-
         int scratchSize = encoded.Length * 733 / 1000 + 1;
-        byte[]? rented = null;
-        try
+
+        if (scratchSize <= MaxStackallocByte)
         {
-            Span<byte> decoded = scratchSize > MaxStackallocByte
-                ? (rented = ArrayPool<byte>.Shared.Rent(scratchSize))
-                : stackalloc byte[scratchSize];
-
+            Span<byte> decoded = stackalloc byte[scratchSize];
             int decodedLength = ComputeGenericDecode(encoded, leadingOnes, decoded);
-
             int actualDecodedLength = leadingOnes == encoded.Length ? 0 : decodedLength;
             int totalLength = leadingOnes + actualDecodedLength;
-
             if (destination.Length < totalLength)
             {
                 ThrowHelper.ThrowDestinationTooSmall(nameof(destination));
             }
-
             EmitGenericDecode(destination, leadingOnes, decoded, actualDecodedLength);
+            return totalLength;
+        }
+
+        return DecodeGenericCoreLarge(encoded, leadingOnes, scratchSize, destination);
+    }
+
+    private int DecodeGenericCoreLarge<TChar>(ReadOnlySpan<TChar> encoded, int leadingOnes, int scratchSize, Span<byte> destination)
+        where TChar : unmanaged, IBinaryInteger<TChar>
+    {
+        byte[] rented = ArrayPool<byte>.Shared.Rent(scratchSize);
+        try
+        {
+            int decodedLength = ComputeGenericDecode(encoded, leadingOnes, rented);
+            int actualDecodedLength = leadingOnes == encoded.Length ? 0 : decodedLength;
+            int totalLength = leadingOnes + actualDecodedLength;
+            if (destination.Length < totalLength)
+            {
+                ThrowHelper.ThrowDestinationTooSmall(nameof(destination));
+            }
+            EmitGenericDecode(destination, leadingOnes, rented, actualDecodedLength);
             return totalLength;
         }
         finally
         {
-            if (rented is not null)
-            {
-                ArrayPool<byte>.Shared.Return(rented, clearArray: true);
-            }
+            ArrayPool<byte>.Shared.Return(rented);
         }
     }
 
@@ -156,26 +166,33 @@ public partial class Base58
         }
 
         int scratchSize = encoded.Length * 733 / 1000 + 1;
-        byte[]? rented = null;
-        try
+
+        if (scratchSize <= MaxStackallocByte)
         {
-            Span<byte> decoded = scratchSize > MaxStackallocByte
-                ? (rented = ArrayPool<byte>.Shared.Rent(scratchSize))
-                : stackalloc byte[scratchSize];
-
+            Span<byte> decoded = stackalloc byte[scratchSize];
             int decodedLength = ComputeGenericDecode(encoded, leadingOnes, decoded);
-
-            // Allocate exact-sized heap result, then emit directly into it — single copy.
             byte[] result = new byte[leadingOnes + decodedLength];
             EmitGenericDecode(result, leadingOnes, decoded, decodedLength);
             return result;
         }
+
+        return DecodeGenericToArrayLarge(encoded, leadingOnes, scratchSize);
+    }
+
+    private byte[] DecodeGenericToArrayLarge<TChar>(ReadOnlySpan<TChar> encoded, int leadingOnes, int scratchSize)
+        where TChar : unmanaged, IBinaryInteger<TChar>
+    {
+        byte[] rented = ArrayPool<byte>.Shared.Rent(scratchSize);
+        try
+        {
+            int decodedLength = ComputeGenericDecode(encoded, leadingOnes, rented);
+            byte[] result = new byte[leadingOnes + decodedLength];
+            EmitGenericDecode(result, leadingOnes, rented, decodedLength);
+            return result;
+        }
         finally
         {
-            if (rented is not null)
-            {
-                ArrayPool<byte>.Shared.Return(rented, clearArray: true);
-            }
+            ArrayPool<byte>.Shared.Return(rented);
         }
     }
 

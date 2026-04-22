@@ -2,6 +2,7 @@ using System.Buffers;
 using System.Buffers.Binary;
 using System.Diagnostics;
 using System.Numerics;
+using System.Runtime.CompilerServices;
 
 namespace Base58Encoding;
 
@@ -70,24 +71,30 @@ public partial class Base58
 
         ReadOnlySpan<byte> inputSpan = data[leadingZeros..];
         int size = inputSpan.Length * 137 / 100 + 1;
-        byte[]? rented = null;
+
+        if (size <= MaxStackallocByte)
+        {
+            Span<byte> digits = stackalloc byte[size];
+            int digitCount = ComputeGenericDigits(inputSpan, digits);
+            var state = new EncodeState(digits, 0, digitCount, _characters.Span, _firstCharacter, leadingZeros);
+            return string.Create(state.OutputLength, state, static (span, s) => s.EmitReverse(span));
+        }
+
+        return EncodeGenericToStringLarge(inputSpan, leadingZeros, size);
+    }
+
+    private string EncodeGenericToStringLarge(ReadOnlySpan<byte> inputSpan, int leadingZeros, int size)
+    {
+        byte[] rented = ArrayPool<byte>.Shared.Rent(size);
         try
         {
-            Span<byte> digits = size > MaxStackallocByte
-                ? (rented = ArrayPool<byte>.Shared.Rent(size))
-                : stackalloc byte[size];
-
-            int digitCount = ComputeGenericDigits(inputSpan, digits);
-
-            var state = new EncodeState(digits, 0, digitCount, _characters.Span, _firstCharacter, leadingZeros);
+            int digitCount = ComputeGenericDigits(inputSpan, rented);
+            var state = new EncodeState(rented, 0, digitCount, _characters.Span, _firstCharacter, leadingZeros);
             return string.Create(state.OutputLength, state, static (span, s) => s.EmitReverse(span));
         }
         finally
         {
-            if (rented is not null)
-            {
-                ArrayPool<byte>.Shared.Return(rented, clearArray: true);
-            }
+            ArrayPool<byte>.Shared.Return(rented);
         }
     }
 
@@ -109,31 +116,42 @@ public partial class Base58
 
         ReadOnlySpan<byte> inputSpan = data[leadingZeros..];
         int size = inputSpan.Length * 137 / 100 + 1;
-        byte[]? rented = null;
-        try
+
+        if (size <= MaxStackallocByte)
         {
-            Span<byte> digits = size > MaxStackallocByte
-                ? (rented = ArrayPool<byte>.Shared.Rent(size))
-                : stackalloc byte[size];
-
+            Span<byte> digits = stackalloc byte[size];
             int digitCount = ComputeGenericDigits(inputSpan, digits);
-
             int outputLength = leadingZeros + digitCount;
             if (destination.Length < outputLength)
             {
                 ThrowHelper.ThrowDestinationTooSmall(nameof(destination));
             }
-
             var state = new EncodeState(digits, 0, digitCount, _characters.Span, _firstCharacter, leadingZeros);
+            state.EmitReverse(destination);
+            return outputLength;
+        }
+
+        return EncodeGenericToBytesLarge(inputSpan, leadingZeros, size, destination);
+    }
+
+    private int EncodeGenericToBytesLarge(ReadOnlySpan<byte> inputSpan, int leadingZeros, int size, Span<byte> destination)
+    {
+        byte[] rented = ArrayPool<byte>.Shared.Rent(size);
+        try
+        {
+            int digitCount = ComputeGenericDigits(inputSpan, rented);
+            int outputLength = leadingZeros + digitCount;
+            if (destination.Length < outputLength)
+            {
+                ThrowHelper.ThrowDestinationTooSmall(nameof(destination));
+            }
+            var state = new EncodeState(rented, 0, digitCount, _characters.Span, _firstCharacter, leadingZeros);
             state.EmitReverse(destination);
             return outputLength;
         }
         finally
         {
-            if (rented is not null)
-            {
-                ArrayPool<byte>.Shared.Return(rented, clearArray: true);
-            }
+            ArrayPool<byte>.Shared.Return(rented);
         }
     }
 
@@ -216,6 +234,7 @@ public partial class Base58
         return outputLength;
     }
 
+    [SkipLocalsInit]
     private static int ComputeBitcoin32FastRaw(ReadOnlySpan<byte> data, Span<byte> rawBase58)
     {
         // Convert 32 bytes to 8 uint32 limbs (big-endian)
@@ -322,6 +341,7 @@ public partial class Base58
         return outputLength;
     }
 
+    [SkipLocalsInit]
     private static int ComputeBitcoin64FastRaw(ReadOnlySpan<byte> data, Span<byte> rawBase58)
     {
         // Convert 64 bytes to 16 uint32 limbs (big-endian)
