@@ -7,7 +7,7 @@ A .NET 10.0 Base58 encoding and decoding library with support for multiple alpha
 - **Multiple Alphabets**: Built-in support for Bitcoin(IFPS/Sui/Solana), Ripple, and Flickr alphabets
 - **Memory Efficient**: Uses stackalloc operations when possible to minimize allocations
 - **Type Safe**: Leverages ReadOnlySpan and ReadOnlyMemory for safe memory operations
-- **Intrinsics**: Uses SIMD `Vector128/Vector256` and unrolled loop for counting leading zeros
+- **Intrinsics**: Uses SIMD `Vector256` and unrolled loop for counting leading zeros
 - **Optimized Hot Paths**: Fast fixed-length encode/decode for 32-byte and 64-byte inputs using Firedancer-like optimizations
 
 ## Usage
