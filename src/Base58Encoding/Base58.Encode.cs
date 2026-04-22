@@ -6,7 +6,8 @@ using System.Runtime.CompilerServices;
 
 namespace Base58Encoding;
 
-public partial class Base58
+public sealed partial class Base58<TAlphabet>
+    where TAlphabet : struct, IBase58Alphabet
 {
     /// <summary>
     /// Encodes bytes to a Base58 string.
@@ -20,7 +21,7 @@ public partial class Base58
             return string.Empty;
         }
 
-        if (ReferenceEquals(this, _bitcoin.Value))
+        if (typeof(TAlphabet) == typeof(BitcoinAlphabet))
         {
             return data.Length switch
             {
@@ -47,7 +48,7 @@ public partial class Base58
             return 0;
         }
 
-        if (ReferenceEquals(this, _bitcoin.Value))
+        if (typeof(TAlphabet) == typeof(BitcoinAlphabet))
         {
             return data.Length switch
             {
@@ -63,11 +64,11 @@ public partial class Base58
     [SkipLocalsInit]
     private string EncodeGenericToString(ReadOnlySpan<byte> data)
     {
-        int leadingZeros = CountLeadingZeros(data);
+        int leadingZeros = Base58.CountLeadingZeros(data);
 
         if (leadingZeros == data.Length)
         {
-            return new string(_firstCharacter, leadingZeros);
+            return new string(TAlphabet.FirstCharacter, leadingZeros);
         }
 
         ReadOnlySpan<byte> inputSpan = data[leadingZeros..];
@@ -77,7 +78,7 @@ public partial class Base58
         {
             Span<byte> digits = stackalloc byte[size];
             int digitCount = ComputeGenericDigits(inputSpan, digits);
-            var state = new EncodeState(digits, 0, digitCount, _characters.Span, _firstCharacter, leadingZeros);
+            var state = new EncodeState(digits, 0, digitCount, TAlphabet.Characters, TAlphabet.FirstCharacter, leadingZeros);
             return string.Create(state.OutputLength, state, static (span, s) => s.EmitReverse(span));
         }
 
@@ -90,7 +91,7 @@ public partial class Base58
         try
         {
             int digitCount = ComputeGenericDigits(inputSpan, rented);
-            var state = new EncodeState(rented, 0, digitCount, _characters.Span, _firstCharacter, leadingZeros);
+            var state = new EncodeState(rented, 0, digitCount, TAlphabet.Characters, TAlphabet.FirstCharacter, leadingZeros);
             return string.Create(state.OutputLength, state, static (span, s) => s.EmitReverse(span));
         }
         finally
@@ -102,8 +103,8 @@ public partial class Base58
     [SkipLocalsInit]
     private int EncodeGenericToBytes(ReadOnlySpan<byte> data, Span<byte> destination)
     {
-        int leadingZeros = CountLeadingZeros(data);
-        byte firstByte = (byte)_firstCharacter;
+        int leadingZeros = Base58.CountLeadingZeros(data);
+        byte firstByte = (byte)TAlphabet.FirstCharacter;
 
         if (leadingZeros == data.Length)
         {
@@ -128,7 +129,7 @@ public partial class Base58
             {
                 ThrowHelper.ThrowDestinationTooSmall(nameof(destination));
             }
-            var state = new EncodeState(digits, 0, digitCount, _characters.Span, _firstCharacter, leadingZeros);
+            var state = new EncodeState(digits, 0, digitCount, TAlphabet.Characters, TAlphabet.FirstCharacter, leadingZeros);
             state.EmitReverse(destination);
             return outputLength;
         }
@@ -147,7 +148,7 @@ public partial class Base58
             {
                 ThrowHelper.ThrowDestinationTooSmall(nameof(destination));
             }
-            var state = new EncodeState(rented, 0, digitCount, _characters.Span, _firstCharacter, leadingZeros);
+            var state = new EncodeState(rented, 0, digitCount, TAlphabet.Characters, TAlphabet.FirstCharacter, leadingZeros);
             state.EmitReverse(destination);
             return outputLength;
         }
@@ -186,7 +187,7 @@ public partial class Base58
     [SkipLocalsInit]
     internal static string EncodeBitcoin32FastToString(ReadOnlySpan<byte> data)
     {
-        int inLeadingZeros = CountLeadingZeros(data);
+        int inLeadingZeros = Base58.CountLeadingZeros(data);
 
         if (inLeadingZeros == data.Length)
         {
@@ -207,7 +208,7 @@ public partial class Base58
     [SkipLocalsInit]
     private static int EncodeBitcoin32FastToBytes(ReadOnlySpan<byte> data, Span<byte> destination)
     {
-        int inLeadingZeros = CountLeadingZeros(data);
+        int inLeadingZeros = Base58.CountLeadingZeros(data);
 
         if (inLeadingZeros == data.Length)
         {
@@ -295,7 +296,7 @@ public partial class Base58
     [SkipLocalsInit]
     internal static string EncodeBitcoin64FastToString(ReadOnlySpan<byte> data)
     {
-        int inLeadingZeros = CountLeadingZeros(data);
+        int inLeadingZeros = Base58.CountLeadingZeros(data);
 
         if (inLeadingZeros == data.Length)
         {
@@ -316,7 +317,7 @@ public partial class Base58
     [SkipLocalsInit]
     private static int EncodeBitcoin64FastToBytes(ReadOnlySpan<byte> data, Span<byte> destination)
     {
-        int inLeadingZeros = CountLeadingZeros(data);
+        int inLeadingZeros = Base58.CountLeadingZeros(data);
 
         if (inLeadingZeros == data.Length)
         {
@@ -475,13 +476,4 @@ public partial class Base58
             }
         }
     }
-
-    internal string EncodeGeneric(ReadOnlySpan<byte> data)
-        => data.IsEmpty ? string.Empty : EncodeGenericToString(data);
-
-    internal static string EncodeBitcoin32Fast(ReadOnlySpan<byte> data)
-        => EncodeBitcoin32FastToString(data);
-
-    internal static string EncodeBitcoin64Fast(ReadOnlySpan<byte> data)
-        => EncodeBitcoin64FastToString(data);
 }

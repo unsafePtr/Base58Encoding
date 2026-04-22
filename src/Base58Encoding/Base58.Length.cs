@@ -1,6 +1,6 @@
 namespace Base58Encoding;
 
-public partial class Base58
+public static partial class Base58
 {
     /// <summary>
     /// Returns a safe upper bound for the number of encoded Base58 characters

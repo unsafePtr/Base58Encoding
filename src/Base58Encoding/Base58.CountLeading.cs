@@ -5,7 +5,7 @@ using System.Runtime.Intrinsics;
 
 namespace Base58Encoding;
 
-public partial class Base58
+public static partial class Base58
 {
     internal static int CountLeadingZeros(ReadOnlySpan<byte> data)
     {

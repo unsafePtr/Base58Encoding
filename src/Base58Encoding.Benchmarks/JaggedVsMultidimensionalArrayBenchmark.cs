@@ -248,7 +248,7 @@ public class JaggedVsMultidimensionalArrayBenchmark
 
         // Validate characters and create raw array using JAGGED ARRAY lookup
         Span<byte> rawBase58 = stackalloc byte[Base58BitcoinTables.Raw58Sz32];
-        var bitcoinDecodeTable = Base58Alphabet.Bitcoin.DecodeTable.Span;
+        var bitcoinDecodeTable = BitcoinAlphabet.DecodeTable;
 
         int prepend0 = Base58BitcoinTables.Raw58Sz32 - encoded.Length;
         for (int j = 0; j < Base58BitcoinTables.Raw58Sz32; j++)
@@ -325,7 +325,7 @@ public class JaggedVsMultidimensionalArrayBenchmark
 
         // Validate characters and create raw array using MULTIDIMENSIONAL ARRAY lookup
         Span<byte> rawBase58 = stackalloc byte[Base58BitcoinTables.Raw58Sz32];
-        var bitcoinDecodeTable = Base58Alphabet.Bitcoin.DecodeTable.Span;
+        var bitcoinDecodeTable = BitcoinAlphabet.DecodeTable;
 
         int prepend0 = Base58BitcoinTables.Raw58Sz32 - encoded.Length;
         for (int j = 0; j < Base58BitcoinTables.Raw58Sz32; j++)

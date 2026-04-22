@@ -5,7 +5,8 @@ using System.Runtime.CompilerServices;
 
 namespace Base58Encoding;
 
-public partial class Base58
+public sealed partial class Base58<TAlphabet>
+    where TAlphabet : struct, IBase58Alphabet
 {
     /// <summary>
     /// Decodes a Base58 string to a new byte array.
@@ -20,9 +21,7 @@ public partial class Base58
             return [];
         }
 
-        // Bitcoin fast-path dispatch: allocate the fixed-size result up front
-        // and write directly into it. On fallback we discard and re-decode.
-        if (ReferenceEquals(this, _bitcoin.Value))
+        if (typeof(TAlphabet) == typeof(BitcoinAlphabet))
         {
             if (encoded.Length is >= 43 and <= 44)
             {
@@ -86,7 +85,7 @@ public partial class Base58
     private int DecodeCore<TChar>(ReadOnlySpan<TChar> encoded, Span<byte> destination)
         where TChar : unmanaged, IBinaryInteger<TChar>
     {
-        if (ReferenceEquals(this, _bitcoin.Value))
+        if (typeof(TAlphabet) == typeof(BitcoinAlphabet))
         {
             if (encoded.Length is >= 43 and <= 44)
             {
@@ -113,8 +112,8 @@ public partial class Base58
     private int DecodeGenericCore<TChar>(ReadOnlySpan<TChar> encoded, Span<byte> destination)
         where TChar : unmanaged, IBinaryInteger<TChar>
     {
-        TChar firstChar = TChar.CreateTruncating((ushort)_firstCharacter);
-        int leadingOnes = CountLeadingCharacters(encoded, firstChar);
+        TChar firstChar = TChar.CreateTruncating((ushort)TAlphabet.FirstCharacter);
+        int leadingOnes = Base58.CountLeadingCharacters(encoded, firstChar);
         int scratchSize = encoded.Length * 733 / 1000 + 1;
 
         if (scratchSize <= MaxStackallocByte)
@@ -160,8 +159,8 @@ public partial class Base58
     private byte[] DecodeGenericToArray<TChar>(ReadOnlySpan<TChar> encoded)
         where TChar : unmanaged, IBinaryInteger<TChar>
     {
-        TChar firstChar = TChar.CreateTruncating((ushort)_firstCharacter);
-        int leadingOnes = CountLeadingCharacters(encoded, firstChar);
+        TChar firstChar = TChar.CreateTruncating((ushort)TAlphabet.FirstCharacter);
+        int leadingOnes = Base58.CountLeadingCharacters(encoded, firstChar);
 
         if (leadingOnes == encoded.Length)
         {
@@ -205,7 +204,7 @@ public partial class Base58
         int decodedLength = 1;
         digits[0] = 0;
 
-        ReadOnlySpan<byte> decodeTable = _decodeTable.Span;
+        ReadOnlySpan<byte> decodeTable = TAlphabet.DecodeTable;
 
         for (int i = leadingOnes; i < encoded.Length; i++)
         {
@@ -256,13 +255,13 @@ public partial class Base58
     /// Throws on invalid character or insufficient destination when fast path matches.
     /// </summary>
     [SkipLocalsInit]
-    private static int TryDecodeBitcoin32Fast<TChar>(ReadOnlySpan<TChar> encoded, Span<byte> destination)
+    internal static int TryDecodeBitcoin32Fast<TChar>(ReadOnlySpan<TChar> encoded, Span<byte> destination)
         where TChar : unmanaged, IBinaryInteger<TChar>
     {
         int charCount = encoded.Length;
 
         Span<byte> rawBase58 = stackalloc byte[Base58BitcoinTables.Raw58Sz32];
-        ReadOnlySpan<byte> bitcoinDecodeTable = Base58Alphabet.Bitcoin.DecodeTable.Span;
+        ReadOnlySpan<byte> bitcoinDecodeTable = BitcoinAlphabet.DecodeTable;
 
         int prepend0 = Base58BitcoinTables.Raw58Sz32 - charCount;
         for (int j = 0; j < Base58BitcoinTables.Raw58Sz32; j++)
@@ -332,7 +331,7 @@ public partial class Base58
         }
 
         TChar one = TChar.CreateTruncating((ushort)'1');
-        int inputLeadingOnes = CountLeadingCharacters(encoded, one);
+        int inputLeadingOnes = Base58.CountLeadingCharacters(encoded, one);
 
         if (outputLeadingZeros != inputLeadingOnes)
         {
@@ -355,13 +354,13 @@ public partial class Base58
     }
 
     [SkipLocalsInit]
-    private static int TryDecodeBitcoin64Fast<TChar>(ReadOnlySpan<TChar> encoded, Span<byte> destination)
+    internal static int TryDecodeBitcoin64Fast<TChar>(ReadOnlySpan<TChar> encoded, Span<byte> destination)
         where TChar : unmanaged, IBinaryInteger<TChar>
     {
         int charCount = encoded.Length;
 
         Span<byte> rawBase58 = stackalloc byte[Base58BitcoinTables.Raw58Sz64];
-        ReadOnlySpan<byte> bitcoinDecodeTable = Base58Alphabet.Bitcoin.DecodeTable.Span;
+        ReadOnlySpan<byte> bitcoinDecodeTable = BitcoinAlphabet.DecodeTable;
 
         int prepend0 = Base58BitcoinTables.Raw58Sz64 - charCount;
         for (int j = 0; j < Base58BitcoinTables.Raw58Sz64; j++)
@@ -429,7 +428,7 @@ public partial class Base58
         }
 
         TChar one = TChar.CreateTruncating((ushort)'1');
-        int inputLeadingOnes = CountLeadingCharacters(encoded, one);
+        int inputLeadingOnes = Base58.CountLeadingCharacters(encoded, one);
 
         if (outputLeadingZeros != inputLeadingOnes)
         {
@@ -449,16 +448,6 @@ public partial class Base58
         }
 
         return 64;
-    }
-
-    internal byte[] DecodeGeneric(ReadOnlySpan<char> encoded)
-    {
-        if (encoded.IsEmpty)
-        {
-            return [];
-        }
-
-        return DecodeGenericToArray<char>(encoded);
     }
 
     internal static byte[]? DecodeBitcoin32Fast(ReadOnlySpan<char> encoded)
