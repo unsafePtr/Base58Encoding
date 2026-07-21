@@ -14,7 +14,7 @@ public sealed partial class Base58<TAlphabet>
     /// <param name="encoded">Base58 encoded input.</param>
     /// <returns>Decoded byte array.</returns>
     /// <exception cref="ArgumentException">Invalid Base58 character.</exception>
-    public byte[] Decode(ReadOnlySpan<char> encoded)
+    public byte[] Decode(scoped ReadOnlySpan<char> encoded)
     {
         if (encoded.IsEmpty)
         {
@@ -53,7 +53,7 @@ public sealed partial class Base58<TAlphabet>
     /// <exception cref="ArgumentException">
     /// Thrown on invalid Base58 character or when <paramref name="destination"/> is too small.
     /// </exception>
-    public int Decode(ReadOnlySpan<char> encoded, Span<byte> destination)
+    public int Decode(scoped ReadOnlySpan<char> encoded, scoped Span<byte> destination)
     {
         if (encoded.IsEmpty)
         {
@@ -72,7 +72,7 @@ public sealed partial class Base58<TAlphabet>
     /// <exception cref="ArgumentException">
     /// Thrown on invalid Base58 character or when <paramref name="destination"/> is too small.
     /// </exception>
-    public int Decode(ReadOnlySpan<byte> encoded, Span<byte> destination)
+    public int Decode(scoped ReadOnlySpan<byte> encoded, scoped Span<byte> destination)
     {
         if (encoded.IsEmpty)
         {

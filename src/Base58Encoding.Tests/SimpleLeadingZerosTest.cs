@@ -1,11 +1,9 @@
-using System.Runtime.Intrinsics;
-
 namespace Base58Encoding.Tests;
 
 public class SimpleLeadingZerosTest
 {
     [Fact]
-    public void BitcoinAddress_CountLeadingZerosMultipleWays_SameResult()
+    public void BitcoinAddress_CountLeadingZeros_MatchesManualCount()
     {
         var address = "1111111111111111111114oLvT2";
         var decoded = Base58.Bitcoin.Decode(address);
@@ -18,16 +16,7 @@ public class SimpleLeadingZerosTest
             manualCount++;
         }
 
-        // Test SIMD
-        int simdCount = Base58.CountLeadingZerosSimd(decoded, out int processed);
-        var simdScalarCount = 0;
-        if (simdCount >= processed)
-        {
-            int remaining = Base58.CountLeadingZerosScalar(decoded.AsSpan(simdCount));
-            simdScalarCount = simdCount + remaining;
-        }
-
-        Assert.Equal(simdScalarCount, manualCount);
+        Assert.Equal(manualCount, Base58.CountLeadingZeros(decoded));
     }
 
     [Theory]
@@ -38,33 +27,35 @@ public class SimpleLeadingZerosTest
     [InlineData(31)]
     public void CountLeadingZeros_32Size_ReturnsCorrectNumber(int zerosCount)
     {
-        Assert.SkipUnless(Vector256.IsHardwareAccelerated, "Requires Vector256 hardware acceleration");
-
         // Arrange
         var data = new byte[32];
         data.AsSpan(0, zerosCount).Fill(0x00);
         Random.Shared.NextBytes(data.AsSpan(zerosCount));
+        data[zerosCount] = 1;
 
-        // Act
-        var result = Base58.CountLeadingZerosSimd(data, out var processed);
-
-        Assert.Equal(zerosCount, result);
-        Assert.Equal(data.Length, processed);
+        // Act / Assert
+        Assert.Equal(zerosCount, Base58.CountLeadingZeros(data));
     }
 
     [Fact]
     public void CountLeadingZeros_512Size_ReturnsCorrectNumber()
     {
-        Assert.SkipUnless(Vector256.IsHardwareAccelerated, "Requires Vector256 hardware acceleration");
-
         // Arrange
         var zerosCount = 123;
         var data = new byte[512];
         data.AsSpan(0, zerosCount).Fill(0x00);
         Random.Shared.NextBytes(data.AsSpan(zerosCount));
-        // Act
-        var result = Base58.CountLeadingZerosSimd(data, out var processed);
-        Assert.Equal(zerosCount, result);
-        Assert.Equal(Vector256<byte>.Count * 4, processed); // Vector256 used 4 times
+        data[zerosCount] = 1;
+
+        // Act / Assert
+        Assert.Equal(zerosCount, Base58.CountLeadingZeros(data));
+    }
+
+    [Fact]
+    public void CountLeadingZeros_AllZeros_ReturnsLength()
+    {
+        var data = new byte[40];
+
+        Assert.Equal(data.Length, Base58.CountLeadingZeros(data));
     }
 }

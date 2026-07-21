@@ -14,7 +14,7 @@ public sealed partial class Base58<TAlphabet>
     /// </summary>
     /// <param name="data">Bytes to encode.</param>
     /// <returns>Base58 encoded string.</returns>
-    public string Encode(ReadOnlySpan<byte> data)
+    public string Encode(scoped ReadOnlySpan<byte> data)
     {
         if (data.IsEmpty)
         {
@@ -41,7 +41,7 @@ public sealed partial class Base58<TAlphabet>
     /// <param name="destination">Destination buffer for ASCII-encoded Base58 characters.</param>
     /// <returns>Number of bytes written to <paramref name="destination"/>.</returns>
     /// <exception cref="ArgumentException">Thrown if <paramref name="destination"/> is too small.</exception>
-    public int Encode(ReadOnlySpan<byte> data, Span<byte> destination)
+    public int Encode(scoped ReadOnlySpan<byte> data, scoped Span<byte> destination)
     {
         if (data.IsEmpty)
         {
