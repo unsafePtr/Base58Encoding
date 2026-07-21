@@ -104,6 +104,19 @@ public class CountLeadingZerosBenchmark
         return totalCount;
     }
 
+    [Benchmark(Description = "IndexOfAnyExcept")]
+    public int IndexOfAnyExceptScan()
+    {
+        var totalCount = 0;
+        foreach (var data in TestData)
+        {
+            var index = data.AsSpan().IndexOfAnyExcept((byte)0);
+            totalCount += index < 0 ? data.Length : index;
+        }
+
+        return totalCount;
+    }
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int CountLeadingZerosArray(ReadOnlySpan<byte> data)
     {

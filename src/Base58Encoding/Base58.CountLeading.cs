@@ -71,6 +71,7 @@ public static partial class Base58
                 }
                 return count;
             }
+
             count += sizeof(ulong);
             length -= sizeof(ulong);
         }
