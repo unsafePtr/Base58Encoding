@@ -5,3 +5,4 @@ using BenchmarkDotNet.Running;
 BenchmarkRunner.Run<Base58ComparisonBenchmark>();
 //BenchmarkRunner.Run<FastVsRegularEncodeBenchmark>();
 //BenchmarkRunner.Run<BoundsCheckComparisonBenchmark>();
+//BenchmarkRunner.Run<EndToEndDecodeBenchmark>(args: args);
