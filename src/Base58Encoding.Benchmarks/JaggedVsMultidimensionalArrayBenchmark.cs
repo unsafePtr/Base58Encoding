@@ -17,11 +17,11 @@ public class JaggedVsMultidimensionalArrayBenchmark
 
     // Jagged arrays (current implementation)
     private static readonly uint[][] JaggedEncodeTable32 = Base58BitcoinTables.EncodeTable32;
-    private static readonly uint[][] JaggedDecodeTable32 = Base58BitcoinTables.DecodeTable32;
+    private static readonly uint[][] JaggedDecodeTable32 = UntransposeToJagged(Base58BitcoinTables.DecodeTable32, Base58BitcoinTables.IntermediateSz32, Base58BitcoinTables.BinarySz32);
 
     // Multidimensional arrays (alternative implementation)
     private static readonly uint[,] MultidimensionalEncodeTable32 = ConvertToMultidimensional(Base58BitcoinTables.EncodeTable32);
-    private static readonly uint[,] MultidimensionalDecodeTable32 = ConvertToMultidimensional(Base58BitcoinTables.DecodeTable32);
+    private static readonly uint[,] MultidimensionalDecodeTable32 = ConvertToMultidimensional(JaggedDecodeTable32);
 
     private readonly ref struct FastEncodeState
     {
@@ -69,6 +69,23 @@ public class JaggedVsMultidimensionalArrayBenchmark
     public byte[] DecodeWithMultidimensionalArray()
     {
         return DecodeBitcoin32FastMultidimensional(_encodedBase58)!;
+    }
+
+    // Production DecodeTable32 is now transposed column-major ulong; rebuild the original
+    // row-major jagged form so this layout comparison keeps compiling.
+    private static uint[][] UntransposeToJagged(ulong[] transposed, int rows, int cols)
+    {
+        var jagged = new uint[rows][];
+        for (int i = 0; i < rows; i++)
+        {
+            jagged[i] = new uint[cols];
+            for (int j = 0; j < cols; j++)
+            {
+                jagged[i][j] = (uint)transposed[j * rows + i];
+            }
+        }
+
+        return jagged;
     }
 
     private static uint[,] ConvertToMultidimensional(uint[][] jaggedArray)
