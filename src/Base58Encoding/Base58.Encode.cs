@@ -3,6 +3,8 @@ using System.Buffers.Binary;
 using System.Diagnostics;
 using System.Numerics;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+using System.Runtime.Intrinsics;
 
 namespace Base58Encoding;
 
@@ -255,13 +257,12 @@ public sealed partial class Base58<TAlphabet>
         Span<ulong> intermediate = stackalloc ulong[Base58BitcoinTables.IntermediateSz32];
         intermediate.Clear();
 
-        // Matrix multiplication: intermediate = binary * EncodeTable32
+        // Matrix multiplication: for each source limb, add binary[i] * row into intermediate[1..].
+        int rowLen = Base58BitcoinTables.IntermediateSz32 - 1;
+        Span<ulong> acc = intermediate.Slice(1, rowLen);
         for (int i = 0; i < Base58BitcoinTables.BinarySz32; i++)
         {
-            for (int j = 0; j < Base58BitcoinTables.IntermediateSz32 - 1; j++)
-            {
-                intermediate[j + 1] += (ulong)binary[i] * Base58BitcoinTables.EncodeTable32[i][j];
-            }
+            TensorMultiplyAdd(Base58BitcoinTables.EncodeTable32RowMajor.AsSpan(i * rowLen, rowLen), binary[i], acc);
         }
 
         // Reduce each term to be less than 58^5
@@ -366,25 +367,20 @@ public sealed partial class Base58<TAlphabet>
         Span<ulong> intermediate = stackalloc ulong[Base58BitcoinTables.IntermediateSz64];
         intermediate.Clear();
 
+        int rowLen = Base58BitcoinTables.IntermediateSz64 - 1;
+        Span<ulong> acc = intermediate.Slice(1, rowLen);
         for (int i = 0; i < 8; i++)
         {
-            for (int j = 0; j < Base58BitcoinTables.IntermediateSz64 - 1; j++)
-            {
-                intermediate[j + 1] += (ulong)binary[i] * Base58BitcoinTables.EncodeTable64[i][j];
-            }
+            TensorMultiplyAdd(Base58BitcoinTables.EncodeTable64RowMajor.AsSpan(i * rowLen, rowLen), binary[i], acc);
         }
 
         // Mini-reduction to prevent overflow (like Firedancer)
         intermediate[15] += intermediate[16] / Base58BitcoinTables.R1Div;
         intermediate[16] %= Base58BitcoinTables.R1Div;
 
-        // Finish remaining iterations
         for (int i = 8; i < Base58BitcoinTables.BinarySz64; i++)
         {
-            for (int j = 0; j < Base58BitcoinTables.IntermediateSz64 - 1; j++)
-            {
-                intermediate[j + 1] += (ulong)binary[i] * Base58BitcoinTables.EncodeTable64[i][j];
-            }
+            TensorMultiplyAdd(Base58BitcoinTables.EncodeTable64RowMajor.AsSpan(i * rowLen, rowLen), binary[i], acc);
         }
 
         // Reduce each term to be less than 58^5
@@ -417,6 +413,48 @@ public sealed partial class Base58<TAlphabet>
         }
 
         return rawLeadingZeros;
+    }
+
+    // acc[k] += row[k] * scale over the whole row: multiply the row by a scalar and add into the
+    // accumulator. The encode counterpart of decode's TensorDot; mirrors TensorPrimitives.MultiplyAdd
+    // (System.Numerics.Tensors) as a tiny dependency-free version tuned for the fixed-length encode
+    // rows. Widest available vector width first, then a scalar tail that also serves as the fallback
+    // when no width is hardware-accelerated. Wrapping ulong multiply-add in source-limb order, so the
+    // result is bit-identical to the scalar loop.
+    private static void TensorMultiplyAdd(ReadOnlySpan<ulong> row, ulong scale, Span<ulong> acc)
+    {
+        ref ulong rr = ref MemoryMarshal.GetReference(row);
+        ref ulong ar = ref MemoryMarshal.GetReference(acc);
+        int len = row.Length;
+        int i = 0;
+
+        if (Vector256.IsHardwareAccelerated && len >= Vector256<ulong>.Count)
+        {
+            Vector256<ulong> s = Vector256.Create(scale);
+            int upper = len - Vector256<ulong>.Count;
+            for (; i <= upper; i += Vector256<ulong>.Count)
+            {
+                Vector256<ulong> a = Vector256.LoadUnsafe(ref ar, (nuint)i);
+                Vector256<ulong> r = Vector256.LoadUnsafe(ref rr, (nuint)i);
+                (a + (r * s)).StoreUnsafe(ref ar, (nuint)i);
+            }
+        }
+        else if (Vector128.IsHardwareAccelerated && len >= Vector128<ulong>.Count)
+        {
+            Vector128<ulong> s = Vector128.Create(scale);
+            int upper = len - Vector128<ulong>.Count;
+            for (; i <= upper; i += Vector128<ulong>.Count)
+            {
+                Vector128<ulong> a = Vector128.LoadUnsafe(ref ar, (nuint)i);
+                Vector128<ulong> r = Vector128.LoadUnsafe(ref rr, (nuint)i);
+                (a + (r * s)).StoreUnsafe(ref ar, (nuint)i);
+            }
+        }
+
+        for (; i < len; i++)
+        {
+            Unsafe.Add(ref ar, i) += Unsafe.Add(ref rr, i) * scale;
+        }
     }
 
     private readonly ref struct EncodeState<T>

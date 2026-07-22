@@ -30,6 +30,11 @@ internal static class Base58BitcoinTables
         [0U, 0U, 0U, 0U, 0U, 0U, 0U, 1U]
     ];
 
+    // EncodeTable32 flattened to a contiguous row-major ulong[]: TensorMultiplyAdd vector-loads a
+    // whole source-limb row at once, so rows must be contiguous, and ulong matches the accumulator /
+    // vector element type (no per-element widening). Same values as the jagged table, via Flatten.
+    internal static readonly ulong[] EncodeTable32RowMajor = Flatten(EncodeTable32, IntermediateSz32 - 1);
+
     // Decode coefficients stored column-major (transposed): DecodeTable32[j * IntermediateSz32 + i]
     // holds the coefficient for output limb j, intermediate limb i. Each output limb's column of
     // IntermediateSz32 coefficients is contiguous, so it can be fed straight into TensorDot.
@@ -72,6 +77,11 @@ internal static class Base58BitcoinTables
         [0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 1U]
     ];
 
+    // EncodeTable64 flattened to a contiguous row-major ulong[]: TensorMultiplyAdd vector-loads a
+    // whole source-limb row at once, so rows must be contiguous, and ulong matches the accumulator /
+    // vector element type (no per-element widening). Same values as the jagged table, via Flatten.
+    internal static readonly ulong[] EncodeTable64RowMajor = Flatten(EncodeTable64, IntermediateSz64 - 1);
+
     // Decode coefficients stored column-major (transposed): DecodeTable64[j * IntermediateSz64 + i]
     // holds the coefficient for output limb j, intermediate limb i. Each output limb's column of
     // IntermediateSz64 coefficients is contiguous, so it can be fed straight into TensorDot.
@@ -94,4 +104,18 @@ internal static class Base58BitcoinTables
         0U, 0U, 0U, 0U, 0U, 268435456U, 176160768U, 2485387264U, 1468637184U, 2959155456U, 1199103528U, 485140318U, 1483338760U, 2595180627U, 1933902296U, 100304420U, 0U, 0U,
         0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 1073741824U, 4194304000U, 17825792U, 4063920128U, 3355157504U, 656356768U, 1U,
     ];
+
+    private static ulong[] Flatten(uint[][] rows, int rowLength)
+    {
+        var flat = new ulong[rows.Length * rowLength];
+        for (int i = 0; i < rows.Length; i++)
+        {
+            for (int j = 0; j < rowLength; j++)
+            {
+                flat[i * rowLength + j] = rows[i][j];
+            }
+        }
+
+        return flat;
+    }
 }
