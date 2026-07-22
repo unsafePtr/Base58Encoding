@@ -70,6 +70,7 @@ These optimizations are based on Firedancer's specialized Base58 algorithms and 
 - Precomputed multiplication tables replace expensive division operations
 - Converts binary data to base 58^5 limbs, then to raw base58 digits
 - Matrix multiplication approach processes 5 base58 digits simultaneously
+- The 32/64-byte encode and decode matrix kernels are SIMD-accelerated with `Vector256`/`Vector128` (widest available width, scalar fallback) — in addition to the vectorized leading-zero count
 - Separate encode/decode tables for 32-byte and 64-byte fixed sizes
 - Achieves ~2.5x speedup through table-based optimizations vs iterative division
 
@@ -81,43 +82,43 @@ These optimizations are based on Firedancer's specialized Base58 algorithms and 
 
 ```
 
-BenchmarkDotNet v0.15.8, Windows 11 (10.0.26200.8246/25H2/2025Update/HudsonValley2)
+BenchmarkDotNet v0.15.8, Windows 11 (10.0.26200.8655/25H2/2025Update/HudsonValley2)
 13th Gen Intel Core i7-13700KF 3.40GHz, 1 CPU, 24 logical and 16 physical cores
-.NET SDK 10.0.203
-  [Host]     : .NET 10.0.7 (10.0.7, 10.0.726.21808), X64 RyuJIT x86-64-v3
-  DefaultJob : .NET 10.0.7 (10.0.7, 10.0.726.21808), X64 RyuJIT x86-64-v3
+.NET SDK 11.0.100-preview.3.26207.106
+  [Host]     : .NET 10.0.10 (10.0.10, 10.0.1026.32716), X64 RyuJIT x86-64-v3
+  DefaultJob : .NET 10.0.10 (10.0.10, 10.0.1026.32716), X64 RyuJIT x86-64-v3
 
 Job=DefaultJob  
 
 ```
-| Method                     | VectorType     | Mean        | Ratio | Gen0   | Allocated | Alloc Ratio |
-|--------------------------- |--------------- |------------:|------:|-------:|----------:|------------:|
-| **&#39;Our Base58 Encode&#39;**        | **BitcoinAddress** |   **537.17 ns** |  **1.00** | **0.0057** |      **96 B** |        **1.00** |
-| &#39;SimpleBase Base58 Encode&#39; | BitcoinAddress |   776.69 ns |  1.45 | 0.0057 |      96 B |        1.00 |
-| &#39;Our Base58 Decode&#39;        | BitcoinAddress |   160.88 ns |  0.30 | 0.0033 |      56 B |        0.58 |
-| &#39;SimpleBase Base58 Decode&#39; | BitcoinAddress |   353.19 ns |  0.66 | 0.0033 |      56 B |        0.58 |
-|                            |                |             |       |        |           |             |
-| **&#39;Our Base58 Encode&#39;**        | **SolanaAddress**  |    **94.07 ns** |  **1.00** | **0.0070** |     **112 B** |        **1.00** |
-| &#39;SimpleBase Base58 Encode&#39; | SolanaAddress  | 1,433.92 ns | 15.24 | 0.0057 |     112 B |        1.00 |
-| &#39;Our Base58 Decode&#39;        | SolanaAddress  |   104.19 ns |  1.11 | 0.0035 |      56 B |        0.50 |
-| &#39;SimpleBase Base58 Decode&#39; | SolanaAddress  |   703.66 ns |  7.48 | 0.0029 |      56 B |        0.50 |
-|                            |                |             |       |        |           |             |
-| **&#39;Our Base58 Encode&#39;**        | **SolanaTx**       |   **239.21 ns** |  **1.00** | **0.0124** |     **200 B** |        **1.00** |
-| &#39;SimpleBase Base58 Encode&#39; | SolanaTx       | 7,166.10 ns | 29.96 | 0.0076 |     200 B |        1.00 |
-| &#39;Our Base58 Decode&#39;        | SolanaTx       |   180.37 ns |  0.75 | 0.0055 |      88 B |        0.44 |
-| &#39;SimpleBase Base58 Decode&#39; | SolanaTx       | 2,957.77 ns | 12.36 | 0.0038 |      88 B |        0.44 |
-|                            |                |             |       |        |           |             |
-| **&#39;Our Base58 Encode&#39;**        | **IPFSHash**       | **1,084.69 ns** |  **1.00** | **0.0076** |     **120 B** |        **1.00** |
-| &#39;SimpleBase Base58 Encode&#39; | IPFSHash       | 1,617.11 ns |  1.49 | 0.0076 |     120 B |        1.00 |
-| &#39;Our Base58 Decode&#39;        | IPFSHash       |   318.15 ns |  0.29 | 0.0038 |      64 B |        0.53 |
-| &#39;SimpleBase Base58 Decode&#39; | IPFSHash       |   854.47 ns |  0.79 | 0.0038 |      64 B |        0.53 |
-|                            |                |             |       |        |           |             |
-| **&#39;Our Base58 Encode&#39;**        | **MoneroAddress**  | **4,917.65 ns** |  **1.00** | **0.0076** |     **216 B** |        **1.00** |
-| &#39;SimpleBase Base58 Encode&#39; | MoneroAddress  | 8,621.98 ns |  1.75 |      - |     216 B |        1.00 |
-| &#39;Our Base58 Decode&#39;        | MoneroAddress  | 1,198.92 ns |  0.24 | 0.0057 |      96 B |        0.44 |
-| &#39;SimpleBase Base58 Decode&#39; | MoneroAddress  | 3,844.43 ns |  0.78 |      - |      96 B |        0.44 |
-
-
-## License
-
-This project is available under the MIT License.
+| Method                     | Categories | VectorType     | Mean        | Ratio | Gen0   | Allocated | Alloc Ratio |
+|--------------------------- |----------- |--------------- |------------:|------:|-------:|----------:|------------:|
+| **&#39;Our Base58 Decode&#39;**        | **Decode**     | **BitcoinAddress** |   **178.71 ns** |  **1.00** | **0.0033** |      **56 B** |        **1.00** |
+| &#39;SimpleBase Base58 Decode&#39; | Decode     | BitcoinAddress |   364.51 ns |  2.04 | 0.0033 |      56 B |        1.00 |
+|                            |            |                |             |       |        |           |             |
+| **&#39;Our Base58 Decode&#39;**        | **Decode**     | **SolanaAddress**  |    **83.27 ns** |  **1.00** | **0.0035** |      **56 B** |        **1.00** |
+| &#39;SimpleBase Base58 Decode&#39; | Decode     | SolanaAddress  |   598.64 ns |  7.19 | 0.0029 |      56 B |        1.00 |
+|                            |            |                |             |       |        |           |             |
+| **&#39;Our Base58 Decode&#39;**        | **Decode**     | **SolanaTx**       |   **167.00 ns** |  **1.00** | **0.0055** |      **88 B** |        **1.00** |
+| &#39;SimpleBase Base58 Decode&#39; | Decode     | SolanaTx       | 4,190.80 ns | 25.10 | 0.0038 |      88 B |        1.00 |
+|                            |            |                |             |       |        |           |             |
+| **&#39;Our Base58 Decode&#39;**        | **Decode**     | **IPFSHash**       |   **339.26 ns** |  **1.00** | **0.0038** |      **64 B** |        **1.00** |
+| &#39;SimpleBase Base58 Decode&#39; | Decode     | IPFSHash       |   641.17 ns |  1.89 | 0.0038 |      64 B |        1.00 |
+|                            |            |                |             |       |        |           |             |
+| **&#39;Our Base58 Decode&#39;**        | **Decode**     | **MoneroAddress**  | **1,391.11 ns** |  **1.00** | **0.0057** |      **96 B** |        **1.00** |
+| &#39;SimpleBase Base58 Decode&#39; | Decode     | MoneroAddress  | 3,882.84 ns |  2.79 |      - |      96 B |        1.00 |
+|                            |            |                |             |       |        |           |             |
+| **&#39;Our Base58 Encode&#39;**        | **Encode**     | **BitcoinAddress** |   **532.69 ns** |  **1.00** | **0.0057** |      **96 B** |        **1.00** |
+| &#39;SimpleBase Base58 Encode&#39; | Encode     | BitcoinAddress |   774.83 ns |  1.45 | 0.0057 |      96 B |        1.00 |
+|                            |            |                |             |       |        |           |             |
+| **&#39;Our Base58 Encode&#39;**        | **Encode**     | **SolanaAddress**  |    **95.15 ns** |  **1.00** | **0.0070** |     **112 B** |        **1.00** |
+| &#39;SimpleBase Base58 Encode&#39; | Encode     | SolanaAddress  | 1,521.61 ns | 15.99 | 0.0057 |     112 B |        1.00 |
+|                            |            |                |             |       |        |           |             |
+| **&#39;Our Base58 Encode&#39;**        | **Encode**     | **SolanaTx**       |   **196.50 ns** |  **1.00** | **0.0126** |     **200 B** |        **1.00** |
+| &#39;SimpleBase Base58 Encode&#39; | Encode     | SolanaTx       | 7,338.14 ns | 37.34 | 0.0076 |     200 B |        1.00 |
+|                            |            |                |             |       |        |           |             |
+| **&#39;Our Base58 Encode&#39;**        | **Encode**     | **IPFSHash**       | **1,085.19 ns** |  **1.00** | **0.0076** |     **120 B** |        **1.00** |
+| &#39;SimpleBase Base58 Encode&#39; | Encode     | IPFSHash       | 1,690.70 ns |  1.56 | 0.0076 |     120 B |        1.00 |
+|                            |            |                |             |       |        |           |             |
+| **&#39;Our Base58 Encode&#39;**        | **Encode**     | **MoneroAddress**  | **4,959.86 ns** |  **1.00** | **0.0076** |     **216 B** |        **1.00** |
+| &#39;SimpleBase Base58 Encode&#39; | Encode     | MoneroAddress  | 8,734.32 ns |  1.76 |      - |     216 B |        1.00 |
