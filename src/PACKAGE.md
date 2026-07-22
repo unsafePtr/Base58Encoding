@@ -2,13 +2,6 @@
 
 A high-performance .NET 10 Base58 encoding and decoding library with support for multiple alphabet variants.
 
-## Features
-
-- **Multiple Alphabets**: Built-in support for Bitcoin (IPFS/Sui/Solana), Ripple, and Flickr alphabets
-- **Optimized Hot Paths**: Firedancer-based fast paths for 32-byte and 64-byte inputs (up to 15x faster than SimpleBase)
-- **Zero-allocation API**: Encode and decode directly into caller-owned buffers
-- **SIMD**: Uses `Vector256` for counting leading zeros
-
 ## Alphabets
 
 | Property | First Character | Used By |
@@ -94,7 +87,3 @@ int written = Base58.Bitcoin.Encode(data, encodedBytes);
 Span<byte> decodedBytes = stackalloc byte[Base58.GetTypicalDecodedLength(written)];
 int decodedLen = Base58.Bitcoin.Decode(encodedBytes[..written], decodedBytes);
 ```
-
-## License
-
-MIT

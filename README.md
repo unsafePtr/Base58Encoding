@@ -70,6 +70,7 @@ These optimizations are based on Firedancer's specialized Base58 algorithms and 
 - Precomputed multiplication tables replace expensive division operations
 - Converts binary data to base 58^5 limbs, then to raw base58 digits
 - Matrix multiplication approach processes 5 base58 digits simultaneously
+- The 32/64-byte encode and decode matrix kernels are SIMD-accelerated with `Vector256`/`Vector128` (widest available width, scalar fallback) — in addition to the vectorized leading-zero count
 - Separate encode/decode tables for 32-byte and 64-byte fixed sizes
 - Achieves ~2.5x speedup through table-based optimizations vs iterative division
 
@@ -121,8 +122,3 @@ Job=DefaultJob
 |                            |            |                |             |       |        |           |             |
 | **&#39;Our Base58 Encode&#39;**        | **Encode**     | **MoneroAddress**  | **4,959.86 ns** |  **1.00** | **0.0076** |     **216 B** |        **1.00** |
 | &#39;SimpleBase Base58 Encode&#39; | Encode     | MoneroAddress  | 8,734.32 ns |  1.76 |      - |     216 B |        1.00 |
-
-
-## License
-
-This project is available under the MIT License.
