@@ -1,11 +1,14 @@
 using Base58Encoding.Benchmarks.Common;
 
 using BenchmarkDotNet.Attributes;
+using BenchmarkDotNet.Configs;
 using BenchmarkDotNet.Diagnosers;
 
 namespace Base58Encoding.Benchmarks;
 
 [MemoryDiagnoser]
+[CategoriesColumn]
+[GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
 [HideColumns("Job", "Error", "StdDev", "Median", "RatioSD")]
 public class Base58ComparisonBenchmark
 {
@@ -28,25 +31,25 @@ public class Base58ComparisonBenchmark
         _base58Encoded = Base58.Bitcoin.Encode(_testData);
     }
 
-    [Benchmark(Description = "Our Base58 Encode", Baseline = true)]
+    [BenchmarkCategory("Encode"), Benchmark(Description = "Our Base58 Encode", Baseline = true)]
     public string Encode_OurBase58()
     {
         return Base58.Bitcoin.Encode(_testData);
     }
 
-    [Benchmark(Description = "SimpleBase Base58 Encode")]
+    [BenchmarkCategory("Encode"), Benchmark(Description = "SimpleBase Base58 Encode")]
     public string Encode_SimpleBase58()
     {
         return SimpleBase.Base58.Bitcoin.Encode(_testData);
     }
 
-    [Benchmark(Description = "Our Base58 Decode")]
+    [BenchmarkCategory("Decode"), Benchmark(Description = "Our Base58 Decode", Baseline = true)]
     public byte[] Decode_OurBase58()
     {
         return Base58.Bitcoin.Decode(_base58Encoded);
     }
 
-    [Benchmark(Description = "SimpleBase Base58 Decode")]
+    [BenchmarkCategory("Decode"), Benchmark(Description = "SimpleBase Base58 Decode")]
     public byte[] Decode_SimpleBase58()
     {
         return SimpleBase.Base58.Bitcoin.Decode(_base58Encoded);
