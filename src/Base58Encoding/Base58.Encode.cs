@@ -421,6 +421,10 @@ public sealed partial class Base58<TAlphabet>
     // rows. Widest available vector width first, then a scalar tail that also serves as the fallback
     // when no width is hardware-accelerated. Wrapping ulong multiply-add in source-limb order, so the
     // result is bit-identical to the scalar loop.
+    //
+    // Kept on LoadUnsafe for the same reason as decode's TensorDot — see the safe-rewrite note there
+    // (safe span ops keep a bounds check on .NET 10, and a redundant per-iteration length guard on
+    // x64 through .NET 11; parity only on arm64 / large inputs).
     private static void TensorMultiplyAdd(ReadOnlySpan<ulong> row, ulong scale, Span<ulong> acc)
     {
         ref ulong rr = ref MemoryMarshal.GetReference(row);

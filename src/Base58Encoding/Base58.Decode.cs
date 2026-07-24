@@ -485,6 +485,20 @@ public sealed partial class Base58<TAlphabet>
     // fixed-length decode columns (IntermediateSz32/64). Widest available width first, then a
     // scalar tail / fallback. The ulong multiply-accumulate wraps identically to the scalar loop,
     // so results are bit-for-bit the same.
+    //
+    // A fully bounds-checked (safe) rewrite is possible on .NET 11+ using the consume-and-advance
+    // idiom — guard every span and advance by re-slicing:
+    //     while (x.Length >= Vector256<ulong>.Count && y.Length >= Vector256<ulong>.Count)
+    //     {
+    //         acc += Vector256.Create(x) * Vector256.Create(y);
+    //         x = x.Slice(Vector256<ulong>.Count);
+    //         y = y.Slice(Vector256<ulong>.Count);
+    //     }
+    // On .NET 11 it JITs bounds-check-free and reaches parity on arm64, but on x64 the JIT still
+    // emits a redundant second length guard per iteration (the spans are equal-length, but it can't
+    // prove it), so it runs ~13-33% slower at the short lengths this kernel uses (9/18). On .NET 10
+    // it is slower on every architecture. Staying on LoadUnsafe until the x64 check is elided.
+    // Benchmark (our exact kernels, by @EgorBo): https://github.com/EgorBot/Benchmarks/issues/401
     private static ulong TensorDot(ReadOnlySpan<ulong> x, ReadOnlySpan<ulong> y)
     {
         ref ulong xr = ref MemoryMarshal.GetReference(x);
