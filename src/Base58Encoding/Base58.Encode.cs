@@ -3,8 +3,6 @@ using System.Buffers.Binary;
 using System.Diagnostics;
 using System.Numerics;
 using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
-using System.Runtime.Intrinsics;
 
 namespace Base58Encoding;
 
@@ -262,7 +260,7 @@ public sealed partial class Base58<TAlphabet>
         Span<ulong> acc = intermediate.Slice(1, rowLen);
         for (int i = 0; i < Base58BitcoinTables.BinarySz32; i++)
         {
-            TensorMultiplyAdd(Base58BitcoinTables.EncodeTable32RowMajor.AsSpan(i * rowLen, rowLen), binary[i], acc);
+            VectorMath.TensorMultiplyAdd(Base58BitcoinTables.EncodeTable32RowMajor.AsSpan(i * rowLen, rowLen), binary[i], acc);
         }
 
         // Reduce each term to be less than 58^5
@@ -371,7 +369,7 @@ public sealed partial class Base58<TAlphabet>
         Span<ulong> acc = intermediate.Slice(1, rowLen);
         for (int i = 0; i < 8; i++)
         {
-            TensorMultiplyAdd(Base58BitcoinTables.EncodeTable64RowMajor.AsSpan(i * rowLen, rowLen), binary[i], acc);
+            VectorMath.TensorMultiplyAdd(Base58BitcoinTables.EncodeTable64RowMajor.AsSpan(i * rowLen, rowLen), binary[i], acc);
         }
 
         // Mini-reduction to prevent overflow (like Firedancer)
@@ -380,7 +378,7 @@ public sealed partial class Base58<TAlphabet>
 
         for (int i = 8; i < Base58BitcoinTables.BinarySz64; i++)
         {
-            TensorMultiplyAdd(Base58BitcoinTables.EncodeTable64RowMajor.AsSpan(i * rowLen, rowLen), binary[i], acc);
+            VectorMath.TensorMultiplyAdd(Base58BitcoinTables.EncodeTable64RowMajor.AsSpan(i * rowLen, rowLen), binary[i], acc);
         }
 
         // Reduce each term to be less than 58^5
@@ -413,52 +411,6 @@ public sealed partial class Base58<TAlphabet>
         }
 
         return rawLeadingZeros;
-    }
-
-    // acc[k] += row[k] * scale over the whole row: multiply the row by a scalar and add into the
-    // accumulator. The encode counterpart of decode's TensorDot; mirrors TensorPrimitives.MultiplyAdd
-    // (System.Numerics.Tensors) as a tiny dependency-free version tuned for the fixed-length encode
-    // rows. Widest available vector width first, then a scalar tail that also serves as the fallback
-    // when no width is hardware-accelerated. Wrapping ulong multiply-add in source-limb order, so the
-    // result is bit-identical to the scalar loop.
-    //
-    // Kept on LoadUnsafe for the same reason as decode's TensorDot — see the safe-rewrite note there
-    // (safe span ops keep a bounds check on .NET 10, and a redundant per-iteration length guard on
-    // x64 through .NET 11; parity only on arm64 / large inputs).
-    private static void TensorMultiplyAdd(ReadOnlySpan<ulong> row, ulong scale, Span<ulong> acc)
-    {
-        ref ulong rr = ref MemoryMarshal.GetReference(row);
-        ref ulong ar = ref MemoryMarshal.GetReference(acc);
-        int len = row.Length;
-        int i = 0;
-
-        if (Vector256.IsHardwareAccelerated && len >= Vector256<ulong>.Count)
-        {
-            Vector256<ulong> s = Vector256.Create(scale);
-            int upper = len - Vector256<ulong>.Count;
-            for (; i <= upper; i += Vector256<ulong>.Count)
-            {
-                Vector256<ulong> a = Vector256.LoadUnsafe(ref ar, (nuint)i);
-                Vector256<ulong> r = Vector256.LoadUnsafe(ref rr, (nuint)i);
-                (a + (r * s)).StoreUnsafe(ref ar, (nuint)i);
-            }
-        }
-        else if (Vector128.IsHardwareAccelerated && len >= Vector128<ulong>.Count)
-        {
-            Vector128<ulong> s = Vector128.Create(scale);
-            int upper = len - Vector128<ulong>.Count;
-            for (; i <= upper; i += Vector128<ulong>.Count)
-            {
-                Vector128<ulong> a = Vector128.LoadUnsafe(ref ar, (nuint)i);
-                Vector128<ulong> r = Vector128.LoadUnsafe(ref rr, (nuint)i);
-                (a + (r * s)).StoreUnsafe(ref ar, (nuint)i);
-            }
-        }
-
-        for (; i < len; i++)
-        {
-            Unsafe.Add(ref ar, i) += Unsafe.Add(ref rr, i) * scale;
-        }
     }
 
     private readonly ref struct EncodeState<T>
