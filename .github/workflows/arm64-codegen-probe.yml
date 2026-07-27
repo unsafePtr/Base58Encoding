@@ -1,0 +1,71 @@
+name: arm64 codegen probe
+
+# Diagnostic-only. VectorMath.MultiplyWidening32 falls through to the portable `x * y` on arm64
+# (Avx2/Sse2 are both unsupported there), and NEON has no 64-bit vector multiply, so the JIT has to
+# synthesise one. The open question is HOW: a vectorised umull-based decomposition, or a scalar
+# software fallback. dotnet/runtime#103555 fixed exactly this for x64 and says nothing about arm64.
+# This dumps the real arm64 disassembly so the answer comes from the machine, not from reasoning.
+
+on:
+  push:
+    branches: [ 'perf/**' ]
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: read
+
+    steps:
+    - uses: actions/checkout@v7
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v5
+      with:
+        dotnet-version: 10.0.x
+
+    - name: Host
+      run: |
+        uname -m
+        lscpu | sed -n '1,20p'
+
+    - name: Build
+      run: |
+        dotnet restore src/Base58Encoding.slnx
+        dotnet build src/Base58Encoding.slnx --configuration Release --no-restore
+
+    # DOTNET_JitDisasm works on the release runtime since .NET 8. TieredCompilation=0 skips tier-0 so
+    # the first call is already fully optimised. The filter keeps the dump to the two kernels.
+    - name: Dump arm64 codegen for VectorMath
+      env:
+        DOTNET_JitDisasm: 'VectorMath:*'
+        DOTNET_TieredCompilation: '0'
+      run: |
+        dotnet run --project src/Base58Encoding.Tests/Base58Encoding.Tests.csproj \
+          --configuration Release --no-build -- -method "*VectorMathTests*" \
+          > arm64-codegen.txt 2>&1 || true
+        echo "----- captured $(wc -l < arm64-codegen.txt) lines -----"
+
+    - name: Verdict
+      run: |
+        echo "=== method headers ==="
+        grep -E '^; Assembly listing for method|^; Emitting|Total bytes of code' arm64-codegen.txt || echo "(no disassembly captured)"
+        echo
+        echo "=== instruction census (what the 64-bit multiply lowered to) ==="
+        for m in umull umull2 uzp1 uzp2 mul shl ushr add bl; do
+          printf '%-8s %s\n' "$m" "$(grep -cE "^[[:space:]]+$m( |$)" arm64-codegen.txt || true)"
+        done
+        echo
+        echo "=== any call out to the scalar software fallback? ==="
+        grep -nE 'Scalar.*Multiply|bl .*Multiply' arm64-codegen.txt || echo "none - good, it is not scalarising"
+        echo
+        echo "=== full multiply-bearing lines ==="
+        grep -nE '^[[:space:]]+(umull|umull2|uzp1|uzp2|mul)( |$)' arm64-codegen.txt | head -40 || true
+
+    - name: Upload full dump
+      if: always()
+      uses: actions/upload-artifact@v7
+      with:
+        name: arm64-codegen
+        path: arm64-codegen.txt
