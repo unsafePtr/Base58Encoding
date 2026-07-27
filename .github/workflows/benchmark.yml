@@ -1,0 +1,148 @@
+name: benchmark
+
+# Runs the end-to-end benchmarks twice on the SAME runner -- once at a baseline commit, once at the
+# current head -- and reports the per-benchmark delta. Both runs share one physical machine and one
+# job, which is the only meaningful noise control available on shared CI hardware: comparing numbers
+# across two jobs, or against numbers recorded on another day, mostly measures the runners.
+#
+# Intended to be manual: a full matrix run is two revisions x several minutes of compute on two
+# runners, far too expensive to attach to every push. The push trigger below is a temporary
+# bootstrap and is scoped to this workflow's own files.
+#
+# To measure a runner's own noise floor, set baseline_ref to the same commit as the branch: the
+# workflow then compares a revision against itself and everything it reports is drift, not signal.
+
+on:
+  # TEMPORARY: workflow_dispatch only becomes dispatchable once the file is on the default branch, so
+  # this trigger exists purely to validate the workflow before merge. Remove it afterwards -- a full
+  # matrix run per push is far too expensive to keep.
+  push:
+    branches: [ 'perf/widening-multiply-32' ]
+    paths:
+      - '.github/workflows/benchmark.yml'
+      - '.github/scripts/compare-bench.cs'
+  workflow_dispatch:
+    inputs:
+      baseline_ref:
+        description: 'Baseline git ref. Default: merge-base with origin/master (i.e. where this branch started).'
+        required: false
+        type: string
+      filter:
+        description: 'BenchmarkDotNet --filter glob.'
+        required: false
+        default: '*EndToEnd*Benchmark*'
+        type: string
+      threshold:
+        description: 'Percent change treated as meaningful, on top of non-overlapping confidence intervals.'
+        required: false
+        default: '10'
+        type: string
+      fail_on_regression:
+        description: 'Fail the job when a benchmark regresses beyond the threshold.'
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  bench:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04-arm
+            label: arm64
+          - runner: ubuntu-24.04
+            label: x64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    permissions:
+      contents: read
+
+    steps:
+    - uses: actions/checkout@v7
+      with:
+        # Full history: the default baseline is the merge-base with master, which a shallow clone
+        # cannot compute.
+        fetch-depth: 0
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v5
+      with:
+        dotnet-version: 10.0.x
+
+    # Record the actual CPU. GitHub's x64 pool mixes Intel Xeon and AMD EPYC, and they differ enough
+    # (AVX-512 presence, cache, clocks) that a delta is only interpretable next to the model name.
+    - name: Host
+      run: |
+        uname -m
+        if command -v lscpu >/dev/null 2>&1; then
+          lscpu | sed -n '1,20p'
+        else
+          sysctl -n machdep.cpu.brand_string hw.ncpu
+        fi
+
+    - name: Resolve baseline
+      id: baseline
+      run: |
+        set -euo pipefail
+        if [ -n "${{ inputs.baseline_ref }}" ]; then
+          BASE=$(git rev-parse "${{ inputs.baseline_ref }}")
+        else
+          git fetch --no-tags origin master
+          BASE=$(git merge-base origin/master HEAD)
+        fi
+        HEAD_SHA=$(git rev-parse HEAD)
+        echo "base=$BASE"       >> "$GITHUB_OUTPUT"
+        echo "head=$HEAD_SHA"   >> "$GITHUB_OUTPUT"
+        echo "Baseline : $BASE ($(git log -1 --format=%s "$BASE"))"
+        echo "Head     : $HEAD_SHA ($(git log -1 --format=%s "$HEAD_SHA"))"
+        if [ "$BASE" = "$HEAD_SHA" ]; then
+          echo "::notice::Baseline and head are the same commit - this run measures the runner's noise floor."
+        fi
+
+    # --launchCount 3 starts three separate processes per benchmark so the reported confidence
+    # interval includes process-to-process variance, not just within-process variance. Without it the
+    # intervals are tight enough (~1.7% margin) that ordinary drift clears them and reads as a real
+    # regression; that was reproduced locally on identical code at +5.4%.
+    #
+    # No --job flag: the benchmark classes already carry [SimpleJob(RuntimeMoniker.Net10_0)], and a
+    # --job argument ADDS a second job rather than replacing it, producing two sets of results per
+    # benchmark under one FullName.
+    - name: Benchmark baseline
+      run: |
+        set -euo pipefail
+        git checkout --quiet --detach ${{ steps.baseline.outputs.base }}
+        dotnet restore src/Base58Encoding.slnx
+        dotnet run --project src/Base58Encoding.Benchmarks/Base58Encoding.Benchmarks.csproj \
+          --configuration Release -- \
+          --filter '${{ inputs.filter || '*EndToEnd*Benchmark*' }}' --launchCount 3 \
+          --exporters json --artifacts "$RUNNER_TEMP/bench-base"
+
+    - name: Benchmark head
+      run: |
+        set -euo pipefail
+        git checkout --quiet --detach ${{ steps.baseline.outputs.head }}
+        dotnet restore src/Base58Encoding.slnx
+        dotnet run --project src/Base58Encoding.Benchmarks/Base58Encoding.Benchmarks.csproj \
+          --configuration Release -- \
+          --filter '${{ inputs.filter || '*EndToEnd*Benchmark*' }}' --launchCount 3 \
+          --exporters json --artifacts "$RUNNER_TEMP/bench-head"
+
+    # A .NET 10 file-based app rather than a shell or python script: the SDK is already set up on the
+    # runner, so this needs no extra toolchain, and it stays in the language of the repo.
+    - name: Compare
+      run: |
+        dotnet run .github/scripts/compare-bench.cs -- \
+          "$RUNNER_TEMP/bench-base" "$RUNNER_TEMP/bench-head" \
+          --threshold '${{ inputs.threshold || '10' }}' \
+          --label '${{ matrix.label }} (${{ matrix.runner }})' \
+          ${{ inputs.fail_on_regression && '--fail-on-regression' || '' }}
+
+    - name: Upload raw results
+      if: always()
+      uses: actions/upload-artifact@v7
+      with:
+        name: bench-${{ matrix.label }}
+        path: |
+          ${{ runner.temp }}/bench-base/**/*.json
+          ${{ runner.temp }}/bench-head/**/*.json
