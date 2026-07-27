@@ -74,7 +74,7 @@ public class SimpleBaseFuzzTests
         _output.WriteLine($"Fuzz OK: {iterations:N0} iterations in {sw.Elapsed.TotalSeconds:F0}s, max input {maxLen} bytes, zero mismatches.");
     }
 
-    // Focused fuzz on the Bitcoin 32- and 64-byte fast paths (TryDecodeBitcoin{32,64}Fast and the
+    // Focused fuzz on the Bitcoin 32- and 64-byte fast paths (DecodeBitcoin{32,64}Fast and the
     // SIMD encode). Only 32/64-byte inputs; the MSB is kept non-zero most of the time so the encoding
     // lands in the fast-path length window (43-44 / 87-88 chars) and Decode takes the fast path.
     // Exercises the string and byte-span overloads of both Encode and Decode against the oracle.
@@ -104,7 +104,7 @@ public class SimpleBaseFuzzTests
             }
             else if (data[0] == 0)
             {
-                // Keep it in the fast-path length window so Decode hits TryDecodeBitcoin{32,64}Fast.
+                // Keep it in the fast-path length window so Decode hits DecodeBitcoin{32,64}Fast.
                 data[0] = 1;
             }
 

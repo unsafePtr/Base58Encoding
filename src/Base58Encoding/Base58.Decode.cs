@@ -26,7 +26,7 @@ public sealed partial class Base58<TAlphabet>
             if (encoded.Length is >= 43 and <= 44)
             {
                 Span<byte> buf = stackalloc byte[32];
-                if (TryDecodeBitcoin32Fast(encoded, buf) == 32)
+                if (DecodeBitcoin32Fast(encoded, buf))
                 {
                     return buf.ToArray();
                 }
@@ -34,7 +34,7 @@ public sealed partial class Base58<TAlphabet>
             else if (encoded.Length is >= 87 and <= 88)
             {
                 Span<byte> buf = stackalloc byte[64];
-                if (TryDecodeBitcoin64Fast(encoded, buf) == 64)
+                if (DecodeBitcoin64Fast(encoded, buf))
                 {
                     return buf.ToArray();
                 }
@@ -89,18 +89,16 @@ public sealed partial class Base58<TAlphabet>
         {
             if (encoded.Length is >= 43 and <= 44)
             {
-                int r = TryDecodeBitcoin32Fast(encoded, destination);
-                if (r >= 0)
+                if (DecodeBitcoin32Fast(encoded, destination))
                 {
-                    return r;
+                    return 32;
                 }
             }
             else if (encoded.Length is >= 87 and <= 88)
             {
-                int r = TryDecodeBitcoin64Fast(encoded, destination);
-                if (r >= 0)
+                if (DecodeBitcoin64Fast(encoded, destination))
                 {
-                    return r;
+                    return 64;
                 }
             }
         }
@@ -252,12 +250,12 @@ public sealed partial class Base58<TAlphabet>
     }
 
     /// <summary>
-    /// Returns bytes written (32) on success, or -1 if the encoded input doesn't
-    /// represent exactly 32 bytes (caller should fall back to generic decode).
-    /// Throws on invalid character or insufficient destination when fast path matches.
+    /// Writes exactly 32 bytes and returns true on success, or false if the encoded input does not
+    /// represent exactly 32 bytes, in which case the caller falls back to the generic decode.
+    /// Throws on an invalid character, or on insufficient destination once the fast path commits.
     /// </summary>
     [SkipLocalsInit]
-    internal static int TryDecodeBitcoin32Fast<TChar>(ReadOnlySpan<TChar> encoded, Span<byte> destination)
+    internal static bool DecodeBitcoin32Fast<TChar>(ReadOnlySpan<TChar> encoded, Span<byte> destination)
         where TChar : unmanaged, IBinaryInteger<TChar>
     {
         int charCount = encoded.Length;
@@ -317,7 +315,7 @@ public sealed partial class Base58<TAlphabet>
         // Check if the result is too large for 32 bytes
         if (binary[0] > 0xFFFFFFFFUL)
         {
-            return -1;
+            return false;
         }
 
         // Count leading zero bytes in the output directly from binary[] without materializing it.
@@ -341,7 +339,7 @@ public sealed partial class Base58<TAlphabet>
 
         if (outputLeadingZeros != inputLeadingOnes)
         {
-            return -1;
+            return false;
         }
 
         if (destination.Length < 32)
@@ -357,11 +355,11 @@ public sealed partial class Base58<TAlphabet>
             BinaryPrimitives.WriteUInt32BigEndian(destination.Slice(offset, sizeof(uint)), value);
         }
 
-        return 32;
+        return true;
     }
 
     [SkipLocalsInit]
-    internal static int TryDecodeBitcoin64Fast<TChar>(ReadOnlySpan<TChar> encoded, Span<byte> destination)
+    internal static bool DecodeBitcoin64Fast<TChar>(ReadOnlySpan<TChar> encoded, Span<byte> destination)
         where TChar : unmanaged, IBinaryInteger<TChar>
     {
         int charCount = encoded.Length;
@@ -421,7 +419,7 @@ public sealed partial class Base58<TAlphabet>
         // Check if the result is too large for 64 bytes
         if (binary[0] > 0xFFFFFFFFUL)
         {
-            return -1;
+            return false;
         }
 
         // Count leading zero bytes in the output directly from binary[] without materializing it.
@@ -445,7 +443,7 @@ public sealed partial class Base58<TAlphabet>
 
         if (outputLeadingZeros != inputLeadingOnes)
         {
-            return -1;
+            return false;
         }
 
         if (destination.Length < 64)
@@ -461,20 +459,18 @@ public sealed partial class Base58<TAlphabet>
             BinaryPrimitives.WriteUInt32BigEndian(destination.Slice(offset, sizeof(uint)), value);
         }
 
-        return 64;
+        return true;
     }
 
     internal static byte[]? DecodeBitcoin32Fast(ReadOnlySpan<char> encoded)
     {
         Span<byte> buffer = stackalloc byte[32];
-        int r = TryDecodeBitcoin32Fast<char>(encoded, buffer);
-        return r < 0 ? null : buffer.ToArray();
+        return DecodeBitcoin32Fast<char>(encoded, buffer) ? buffer.ToArray() : null;
     }
 
     internal static byte[]? DecodeBitcoin64Fast(ReadOnlySpan<char> encoded)
     {
         Span<byte> buffer = stackalloc byte[64];
-        int r = TryDecodeBitcoin64Fast<char>(encoded, buffer);
-        return r < 0 ? null : buffer.ToArray();
+        return DecodeBitcoin64Fast<char>(encoded, buffer) ? buffer.ToArray() : null;
     }
 }
