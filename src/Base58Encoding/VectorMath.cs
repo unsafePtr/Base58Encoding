@@ -41,9 +41,8 @@ internal static class VectorMath
     /// <c>UMULL</c> takes 32-bit inputs, so the JIT cannot use it for a general 64x64 multiply either.
     /// Its fallback extracts each lane to a general-purpose register, uses the scalar <c>mul</c>, and
     /// reinserts — 8 instructions for 2 lanes, crossing the NEON/GPR domain four times (verified on a
-    /// Neoverse-N2 via the arm64 codegen probe workflow). Because both operands fit in 32 bits, one
-    /// <c>uzp1</c> packs the low halves of both vectors together and one <c>umull</c> multiplies them
-    /// widening, staying in the vector domain throughout.
+    /// Neoverse-N2 via the arm64 codegen probe workflow). Because both operands fit in 32 bits, two
+    /// <c>xtn</c> and one <c>umull</c> do the same work in the vector domain with no round trip.
     /// </remarks>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static Vector128<ulong> MultiplyWidening32(Vector128<ulong> x, Vector128<ulong> y)
@@ -58,12 +57,14 @@ internal static class VectorMath
             return Sse2.Multiply(x.AsUInt32(), y.AsUInt32());
         }
 
-        if (AdvSimd.Arm64.IsSupported)
+        if (AdvSimd.IsSupported)
         {
-            // uzp1 takes the even 32-bit lanes of both operands: since each value sits in the low half
-            // of its own 64-bit lane, that is exactly [x0, x1, y0, y1]. umull then widens lane-wise.
-            Vector128<uint> packed = AdvSimd.Arm64.UnzipEven(x.AsUInt32(), y.AsUInt32());
-            return AdvSimd.MultiplyWideningLower(packed.GetLower(), packed.GetUpper());
+            // xtn narrows each 64-bit lane to its low 32 bits, packing a vector into a Vector64<uint>;
+            // lossless here because both operands are under 2^32. umull then widens lane-wise back to
+            // 64-bit products. Three instructions, all in the vector domain.
+            return AdvSimd.MultiplyWideningLower(
+                AdvSimd.ExtractNarrowingLower(x),
+                AdvSimd.ExtractNarrowingLower(y));
         }
 
         return x * y;
