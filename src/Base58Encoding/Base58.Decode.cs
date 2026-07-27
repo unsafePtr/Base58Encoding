@@ -82,7 +82,7 @@ public sealed partial class Base58<TAlphabet>
         return DecodeCore(encoded, destination);
     }
 
-    private int DecodeCore<TChar>(ReadOnlySpan<TChar> encoded, Span<byte> destination)
+    private static int DecodeCore<TChar>(ReadOnlySpan<TChar> encoded, Span<byte> destination)
         where TChar : unmanaged, IBinaryInteger<TChar>
     {
         if (typeof(TAlphabet) == typeof(BitcoinAlphabet))
@@ -107,7 +107,7 @@ public sealed partial class Base58<TAlphabet>
     }
 
     [SkipLocalsInit]
-    private int DecodeGenericCore<TChar>(ReadOnlySpan<TChar> encoded, Span<byte> destination)
+    private static int DecodeGenericCore<TChar>(ReadOnlySpan<TChar> encoded, Span<byte> destination)
         where TChar : unmanaged, IBinaryInteger<TChar>
     {
         TChar firstChar = TChar.CreateTruncating(TAlphabet.FirstCharacter);
@@ -132,7 +132,7 @@ public sealed partial class Base58<TAlphabet>
         return DecodeGenericCoreLarge(encoded, leadingOnes, scratchSize, destination);
     }
 
-    private int DecodeGenericCoreLarge<TChar>(ReadOnlySpan<TChar> encoded, int leadingOnes, int scratchSize, Span<byte> destination)
+    private static int DecodeGenericCoreLarge<TChar>(ReadOnlySpan<TChar> encoded, int leadingOnes, int scratchSize, Span<byte> destination)
         where TChar : unmanaged, IBinaryInteger<TChar>
     {
         byte[] rented = ArrayPool<byte>.Shared.Rent(scratchSize);
@@ -156,7 +156,7 @@ public sealed partial class Base58<TAlphabet>
     }
 
     [SkipLocalsInit]
-    private byte[] DecodeGenericToArray<TChar>(ReadOnlySpan<TChar> encoded)
+    private static byte[] DecodeGenericToArray<TChar>(ReadOnlySpan<TChar> encoded)
         where TChar : unmanaged, IBinaryInteger<TChar>
     {
         TChar firstChar = TChar.CreateTruncating(TAlphabet.FirstCharacter);
@@ -181,7 +181,7 @@ public sealed partial class Base58<TAlphabet>
         return DecodeGenericToArrayLarge(encoded, leadingOnes, scratchSize);
     }
 
-    private byte[] DecodeGenericToArrayLarge<TChar>(ReadOnlySpan<TChar> encoded, int leadingOnes, int scratchSize)
+    private static byte[] DecodeGenericToArrayLarge<TChar>(ReadOnlySpan<TChar> encoded, int leadingOnes, int scratchSize)
         where TChar : unmanaged, IBinaryInteger<TChar>
     {
         byte[] rented = ArrayPool<byte>.Shared.Rent(scratchSize);
@@ -198,7 +198,7 @@ public sealed partial class Base58<TAlphabet>
         }
     }
 
-    private int ComputeGenericDecode<TChar>(ReadOnlySpan<TChar> encoded, int leadingOnes, Span<byte> digits)
+    private static int ComputeGenericDecode<TChar>(ReadOnlySpan<TChar> encoded, int leadingOnes, Span<byte> digits)
         where TChar : unmanaged, IBinaryInteger<TChar>
     {
         int decodedLength = 1;

@@ -62,7 +62,7 @@ public sealed partial class Base58<TAlphabet>
     }
 
     [SkipLocalsInit]
-    private string EncodeGenericToString(ReadOnlySpan<byte> data)
+    private static string EncodeGenericToString(ReadOnlySpan<byte> data)
     {
         int leadingZeros = Base58.CountLeadingZeros(data);
 
@@ -85,7 +85,7 @@ public sealed partial class Base58<TAlphabet>
         return EncodeGenericToStringLarge(inputSpan, leadingZeros, size);
     }
 
-    private string EncodeGenericToStringLarge(ReadOnlySpan<byte> inputSpan, int leadingZeros, int size)
+    private static string EncodeGenericToStringLarge(ReadOnlySpan<byte> inputSpan, int leadingZeros, int size)
     {
         byte[] rented = ArrayPool<byte>.Shared.Rent(size);
         try
@@ -101,7 +101,7 @@ public sealed partial class Base58<TAlphabet>
     }
 
     [SkipLocalsInit]
-    private int EncodeGenericToBytes(ReadOnlySpan<byte> data, Span<byte> destination)
+    private static int EncodeGenericToBytes(ReadOnlySpan<byte> data, Span<byte> destination)
     {
         int leadingZeros = Base58.CountLeadingZeros(data);
 
@@ -137,7 +137,7 @@ public sealed partial class Base58<TAlphabet>
         return EncodeGenericToBytesLarge(inputSpan, leadingZeros, size, destination);
     }
 
-    private int EncodeGenericToBytesLarge(ReadOnlySpan<byte> inputSpan, int leadingZeros, int size, Span<byte> destination)
+    private static int EncodeGenericToBytesLarge(ReadOnlySpan<byte> inputSpan, int leadingZeros, int size, Span<byte> destination)
     {
         byte[] rented = ArrayPool<byte>.Shared.Rent(size);
         try
