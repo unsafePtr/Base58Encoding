@@ -32,6 +32,13 @@ internal static class VectorMath
             (y & Vector256.Create(0xFFFFFFFF_00000000UL)) == Vector256<ulong>.Zero,
             "MultiplyWidening32 requires both operands < 2^32; a wider value would be silently truncated.");
 
+        // No arm64 branch here, unlike the Vector128 overload. Vector256.IsHardwareAccelerated is
+        // never true on arm64: NEON registers are 128-bit, and SVE is vector-length agnostic so .NET
+        // exposes it through its own API rather than mapping Vector256 onto it — the Neoverse-N2
+        // probe reports sve2 in its CPU flags and the JIT still emits only the Vector128 length gate.
+        // Both callers gate on that property, so arm64 never reaches this width. Note the type itself
+        // is perfectly usable there; unguarded it would give identical results, just emulated as two
+        // 128-bit halves. Accelerated or not, an AdvSimd branch here would never execute.
         return Avx2.IsSupported ? Avx2.Multiply(x.AsUInt32(), y.AsUInt32()) : x * y;
     }
 

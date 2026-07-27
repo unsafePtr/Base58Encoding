@@ -13,7 +13,21 @@ on:
 
 jobs:
   probe:
-    runs-on: ubuntu-24.04-arm
+    # Two arm64 microarchitectures from different vendors: Ampere/Neoverse-N2 on Linux and Apple
+    # Silicon on macOS. Both emit an identical 33-instruction sequence for each kernel, so the
+    # xtn/umull lowering is generic arm64 rather than a Neoverse-specific choice. Worth keeping as a
+    # pair: the JIT reports "generic ARM64 + SVE" on the Neoverse runner and plain "generic ARM64" on
+    # Apple, and Vector256 stays inactive on both (the only length gate emitted is cmp #2, the
+    # Vector128 one) — so even an SVE-capable arm64 host exercises only the Vector128 path.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04-arm
+            label: neoverse
+          - runner: macos-26
+            label: apple-silicon
+    runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
 
@@ -25,10 +39,17 @@ jobs:
       with:
         dotnet-version: 10.0.x
 
+    # Branch on the tool rather than on exit status: "lscpu | sed ... || sysctl" silently does nothing
+    # useful on macOS, because the redirect applies to sed and the pipeline reports sed's status (0),
+    # so the fallback never runs and the chip model is never printed.
     - name: Host
       run: |
         uname -m
-        lscpu | sed -n '1,20p'
+        if command -v lscpu >/dev/null 2>&1; then
+          lscpu | sed -n '1,20p'
+        else
+          sysctl -n machdep.cpu.brand_string hw.ncpu
+        fi
 
     - name: Build
       run: |
@@ -40,6 +61,15 @@ jobs:
     # "VectorMath:*" matches nothing, because the JIT names the method
     # "Base58Encoding.VectorMath:TensorDot". JitDisasmSummary is captured alongside so that, if the
     # filter ever stops matching again, the log shows every method actually compiled.
+    # The codegen step below filters to *VectorMathTests* to keep the disassembly readable, so on its
+    # own it proves nothing about the rest of the library. The publish workflow runs the full suite on
+    # arm64, but only for master and PRs into it — never for perf/** branches. Run it here so an arm64
+    # lane-ordering bug cannot reach master unnoticed.
+    - name: Test (full suite, arm64)
+      run: |
+        dotnet run --project src/Base58Encoding.Tests/Base58Encoding.Tests.csproj \
+          --configuration Release --no-build
+
     - name: Dump arm64 codegen for VectorMath
       env:
         DOTNET_JitDisasm: 'Base58Encoding.VectorMath:*'
@@ -85,5 +115,5 @@ jobs:
       if: always()
       uses: actions/upload-artifact@v7
       with:
-        name: arm64-codegen
+        name: arm64-codegen-${{ matrix.label }}
         path: arm64-codegen.txt
