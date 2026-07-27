@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
+using System.Runtime.Intrinsics.Arm;
 using System.Runtime.Intrinsics.X86;
 
 namespace Base58Encoding;
@@ -35,6 +36,15 @@ internal static class VectorMath
     }
 
     /// <inheritdoc cref="MultiplyWidening32(Vector256{ulong}, Vector256{ulong})"/>
+    /// <remarks>
+    /// arm64 hits the same wall as x64 for the opposite reason: NEON's <c>MUL</c> has no 64-bit form and
+    /// <c>UMULL</c> takes 32-bit inputs, so the JIT cannot use it for a general 64x64 multiply either.
+    /// Its fallback extracts each lane to a general-purpose register, uses the scalar <c>mul</c>, and
+    /// reinserts — 8 instructions for 2 lanes, crossing the NEON/GPR domain four times (verified on a
+    /// Neoverse-N2 via the arm64 codegen probe workflow). Because both operands fit in 32 bits, one
+    /// <c>uzp1</c> packs the low halves of both vectors together and one <c>umull</c> multiplies them
+    /// widening, staying in the vector domain throughout.
+    /// </remarks>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static Vector128<ulong> MultiplyWidening32(Vector128<ulong> x, Vector128<ulong> y)
     {
@@ -43,7 +53,20 @@ internal static class VectorMath
             (y & Vector128.Create(0xFFFFFFFF_00000000UL)) == Vector128<ulong>.Zero,
             "MultiplyWidening32 requires both operands < 2^32; a wider value would be silently truncated.");
 
-        return Sse2.IsSupported ? Sse2.Multiply(x.AsUInt32(), y.AsUInt32()) : x * y;
+        if (Sse2.IsSupported)
+        {
+            return Sse2.Multiply(x.AsUInt32(), y.AsUInt32());
+        }
+
+        if (AdvSimd.Arm64.IsSupported)
+        {
+            // uzp1 takes the even 32-bit lanes of both operands: since each value sits in the low half
+            // of its own 64-bit lane, that is exactly [x0, x1, y0, y1]. umull then widens lane-wise.
+            Vector128<uint> packed = AdvSimd.Arm64.UnzipEven(x.AsUInt32(), y.AsUInt32());
+            return AdvSimd.MultiplyWideningLower(packed.GetLower(), packed.GetUpper());
+        }
+
+        return x * y;
     }
 
     // Vectorized dot product of two equal-length ulong spans: sum(x[i] * y[i]).
