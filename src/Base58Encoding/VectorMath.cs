@@ -95,6 +95,9 @@ internal static class VectorMath
     // emits a redundant second length guard per iteration (the spans are equal-length, but it can't
     // prove it), so it runs ~13-33% slower at the short lengths this kernel uses (9/18). On .NET 10
     // it is slower on every architecture. Staying on LoadUnsafe until the x64 check is elided.
+    // Upstream tracking: https://github.com/dotnet/runtime/issues/127506 (removing unsafe from the
+    // vectorization guidance). The x64 gap and the 13-33% figures are from the benchmark run in
+    // https://github.com/EgorBot/Benchmarks/issues/401 (Zen 5 / Turin x64 vs Apple M1 arm64).
     internal static ulong TensorDot(ReadOnlySpan<ulong> x, ReadOnlySpan<ulong> y)
     {
         ref ulong xr = ref MemoryMarshal.GetReference(x);
