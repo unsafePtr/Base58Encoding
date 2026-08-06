@@ -266,23 +266,18 @@ public sealed partial class Base58<TAlphabet>
 
         // Prepend zeros to make exactly Raw58Sz32 characters
         int prepend0 = Base58BitcoinTables.Raw58Sz32 - charCount;
-        for (int j = 0; j < Base58BitcoinTables.Raw58Sz32; j++)
-        {
-            if (j < prepend0)
-            {
-                rawBase58[j] = 0;
-            }
-            else
-            {
-                int c = int.CreateTruncating(encoded[j - prepend0]);
-                // Validate + convert using Bitcoin decode table
-                if ((uint)c >= 128 || bitcoinDecodeTable[c] == 255)
-                {
-                    ThrowHelper.ThrowInvalidCharacter((char)c);
-                }
+        rawBase58[..prepend0].Clear();
 
-                rawBase58[j] = bitcoinDecodeTable[c];
+        for (int i = 0; i < charCount; i++)
+        {
+            int c = int.CreateTruncating(encoded[i]);
+            // Validate + convert using Bitcoin decode table
+            if ((uint)c >= 128 || bitcoinDecodeTable[c] == 255)
+            {
+                ThrowHelper.ThrowInvalidCharacter((char)c);
             }
+
+            rawBase58[prepend0 + i] = bitcoinDecodeTable[c];
         }
 
         // Convert to intermediate format (base 58^5)
@@ -370,23 +365,18 @@ public sealed partial class Base58<TAlphabet>
 
         // Prepend zeros to make exactly Raw58Sz64 characters
         int prepend0 = Base58BitcoinTables.Raw58Sz64 - charCount;
-        for (int j = 0; j < Base58BitcoinTables.Raw58Sz64; j++)
-        {
-            if (j < prepend0)
-            {
-                rawBase58[j] = 0;
-            }
-            else
-            {
-                int c = int.CreateTruncating(encoded[j - prepend0]);
-                // Validate + convert using Bitcoin decode table
-                if ((uint)c >= 128 || bitcoinDecodeTable[c] == 255)
-                {
-                    ThrowHelper.ThrowInvalidCharacter((char)c);
-                }
+        rawBase58[..prepend0].Clear();
 
-                rawBase58[j] = bitcoinDecodeTable[c];
+        for (int i = 0; i < charCount; i++)
+        {
+            int c = int.CreateTruncating(encoded[i]);
+            // Validate + convert using Bitcoin decode table
+            if ((uint)c >= 128 || bitcoinDecodeTable[c] == 255)
+            {
+                ThrowHelper.ThrowInvalidCharacter((char)c);
             }
+
+            rawBase58[prepend0 + i] = bitcoinDecodeTable[c];
         }
 
         // Convert to intermediate format (base 58^5)
