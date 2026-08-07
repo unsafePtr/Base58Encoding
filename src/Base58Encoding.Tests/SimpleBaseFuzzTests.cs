@@ -11,11 +11,9 @@ namespace Base58Encoding.Tests;
 // to run just one (e.g. -method "*Bitcoin_32And64*").
 //
 // Ground truth is a BigInteger oracle (the literal definition of Base58), so the fuzz validates our
-// code without trusting any third party. We also cross-check our ENCODER against SimpleBase's, but
-// intentionally do NOT assert SimpleBase.Decode(ours): SimpleBase's decoder (5.6.0 and 5.6.2) drops
-// the most-significant byte on some larger inputs (verified: our encoding matches the oracle and the
-// Python base58 library, both of which decode it correctly). Reported: ssg/SimpleBase#83
-// (https://github.com/ssg/SimpleBase/issues/83).
+// code without trusting any third party. We also cross-check our encoder against SimpleBase's, but
+// not SimpleBase.Decode(ours): its 5.6.2 decoder drops the most-significant byte on some lengths
+// (ssg/SimpleBase#83, fixed in 5.6.3 — which we cannot take yet, see Directory.Packages.props).
 public class SimpleBaseFuzzTests
 {
     private const string Alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
