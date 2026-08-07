@@ -243,6 +243,11 @@ public sealed partial class Base58<TAlphabet>
     [SkipLocalsInit]
     private static int ComputeBitcoin32FastRaw(ReadOnlySpan<byte> data, Span<byte> rawBase58)
     {
+        // Span params hide their length. Re-slicing to the fixed sizes folds away ~50 bounds checks
+        // below: 30% less code, perf-neutral.
+        data = data[..(Base58BitcoinTables.BinarySz32 * sizeof(uint))];
+        rawBase58 = rawBase58[..Base58BitcoinTables.Raw58Sz32];
+
         // Convert 32 bytes to 8 uint32 limbs (big-endian)
         Span<uint> binary = stackalloc uint[Base58BitcoinTables.BinarySz32];
         for (int i = 0; i < Base58BitcoinTables.BinarySz32; i++)
@@ -351,6 +356,10 @@ public sealed partial class Base58<TAlphabet>
     [SkipLocalsInit]
     private static int ComputeBitcoin64FastRaw(ReadOnlySpan<byte> data, Span<byte> rawBase58)
     {
+        // See ComputeBitcoin32FastRaw.
+        data = data[..(Base58BitcoinTables.BinarySz64 * sizeof(uint))];
+        rawBase58 = rawBase58[..Base58BitcoinTables.Raw58Sz64];
+
         // Convert 64 bytes to 16 uint32 limbs (big-endian)
         Span<uint> binary = stackalloc uint[Base58BitcoinTables.BinarySz64];
         for (int i = 0; i < Base58BitcoinTables.BinarySz64; i++)
