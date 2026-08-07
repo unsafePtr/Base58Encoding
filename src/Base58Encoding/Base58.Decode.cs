@@ -112,7 +112,7 @@ public sealed partial class Base58<TAlphabet>
     {
         TChar firstChar = TChar.CreateTruncating(TAlphabet.FirstCharacter);
         int leadingOnes = Base58.CountLeadingCharacters(encoded, firstChar);
-        int scratchSize = encoded.Length * 733 / 1000 + 1;
+        int scratchSize = Base58.GetTypicalDecodedLength(encoded.Length);
 
         if (scratchSize <= MaxStackallocByte)
         {
@@ -167,7 +167,7 @@ public sealed partial class Base58<TAlphabet>
             return new byte[leadingOnes];
         }
 
-        int scratchSize = encoded.Length * 733 / 1000 + 1;
+        int scratchSize = Base58.GetTypicalDecodedLength(encoded.Length);
 
         if (scratchSize <= MaxStackallocByte)
         {

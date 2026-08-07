@@ -8,6 +8,14 @@ public static partial class Base58
     /// </summary>
     /// <param name="byteCount">Length of the input data in bytes.</param>
     /// <returns>Maximum number of characters/bytes written by <c>Encode</c>.</returns>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// Thrown if <paramref name="byteCount"/> is negative, or so large that the encoded
+    /// length would exceed <see cref="int.MaxValue"/>.
+    /// </exception>
+    /// <remarks>
+    /// 137 = ceil(100 * log(256)/log(58)); sufficient for every length because 58^137 &gt; 2^800,
+    /// and 136 is not. Do not shrink it or the <c>+ 1</c>, which covers the leading digit.
+    /// </remarks>
     public static int GetMaxEncodedLength(int byteCount)
     {
         if (byteCount < 0)
@@ -20,7 +28,14 @@ public static partial class Base58
             return 0;
         }
 
-        return byteCount * 138 / 100 + 1;
+        long maxLength = (long)byteCount * 137 / 100 + 1;
+
+        if (maxLength > int.MaxValue)
+        {
+            ThrowHelper.ThrowInputTooLarge(nameof(byteCount));
+        }
+
+        return (int)maxLength;
     }
 
     /// <summary>
@@ -53,6 +68,6 @@ public static partial class Base58
             return 0;
         }
 
-        return encodedLength * 733 / 1000 + 1;
+        return (int)((long)encodedLength * 733 / 1000 + 1);
     }
 }
