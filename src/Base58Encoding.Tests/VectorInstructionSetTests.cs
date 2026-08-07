@@ -17,10 +17,12 @@ namespace Base58Encoding.Tests;
 //   DOTNET_EnableAVX2=0        disables AVX2 (and AVX-512), leaving SSE  -> forces the Vector128 path
 //   DOTNET_EnableHWIntrinsic=0 disables all hardware intrinsics          -> forces the scalar path
 //
-// Explicit because it spawns processes -- opt-in, not part of every run. The child runs with the
-// default (explicit off), so this test does not re-spawn itself.
+// Runs by default: these are the only tests covering the Vector128 and scalar paths. ChildMarker is
+// what stops the child spawning its own child.
 public class VectorInstructionSetTests
 {
+    private const string ChildMarker = "BASE58_VECTOR_CHILD";
+
     private readonly ITestOutputHelper _output;
 
     public VectorInstructionSetTests(ITestOutputHelper output)
@@ -28,11 +30,13 @@ public class VectorInstructionSetTests
         _output = output;
     }
 
-    [Theory(Explicit = true)]
+    [Theory]
     [InlineData("DOTNET_EnableAVX2", "0")]        // disable AVX2 -> forces the Vector128 path
     [InlineData("DOTNET_EnableHWIntrinsic", "0")] // disable all hardware intrinsics -> forces the scalar path
     public void AllTests_Pass_WithVectorInstructionSetDisabled(string environmentVariable, string value)
     {
+        Assert.SkipWhen(Environment.GetEnvironmentVariable(ChildMarker) == "1", "already the child run");
+
 #if DEBUG
         const string configuration = "Debug";
 #else
@@ -55,6 +59,7 @@ public class VectorInstructionSetTests
         startInfo.ArgumentList.Add("--no-build");
         startInfo.ArgumentList.Add("--no-restore");
         startInfo.Environment[environmentVariable] = value;
+        startInfo.Environment[ChildMarker] = "1";
 
         using var process = Process.Start(startInfo)!;
         string stdout = process.StandardOutput.ReadToEnd();

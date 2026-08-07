@@ -11,11 +11,9 @@ namespace Base58Encoding.Tests;
 // to run just one (e.g. -method "*Bitcoin_32And64*").
 //
 // Ground truth is a BigInteger oracle (the literal definition of Base58), so the fuzz validates our
-// code without trusting any third party. We also cross-check our ENCODER against SimpleBase's, but
-// intentionally do NOT assert SimpleBase.Decode(ours): SimpleBase's decoder (5.6.0 and 5.6.2) drops
-// the most-significant byte on some larger inputs (verified: our encoding matches the oracle and the
-// Python base58 library, both of which decode it correctly). Reported: ssg/SimpleBase#83
-// (https://github.com/ssg/SimpleBase/issues/83).
+// code without trusting any third party. We also cross-check our encoder against SimpleBase's, but
+// not SimpleBase.Decode(ours): its 5.6.2 decoder drops the most-significant byte on some lengths
+// (ssg/SimpleBase#83, fixed in 5.6.3 — which we cannot take yet, see Directory.Packages.props).
 public class SimpleBaseFuzzTests
 {
     private const string Alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
@@ -74,7 +72,7 @@ public class SimpleBaseFuzzTests
         _output.WriteLine($"Fuzz OK: {iterations:N0} iterations in {sw.Elapsed.TotalSeconds:F0}s, max input {maxLen} bytes, zero mismatches.");
     }
 
-    // Focused fuzz on the Bitcoin 32- and 64-byte fast paths (TryDecodeBitcoin{32,64}Fast and the
+    // Focused fuzz on the Bitcoin 32- and 64-byte fast paths (DecodeBitcoin{32,64}Fast and the
     // SIMD encode). Only 32/64-byte inputs; the MSB is kept non-zero most of the time so the encoding
     // lands in the fast-path length window (43-44 / 87-88 chars) and Decode takes the fast path.
     // Exercises the string and byte-span overloads of both Encode and Decode against the oracle.
@@ -104,7 +102,7 @@ public class SimpleBaseFuzzTests
             }
             else if (data[0] == 0)
             {
-                // Keep it in the fast-path length window so Decode hits TryDecodeBitcoin{32,64}Fast.
+                // Keep it in the fast-path length window so Decode hits DecodeBitcoin{32,64}Fast.
                 data[0] = 1;
             }
 

@@ -6,7 +6,6 @@ using BenchmarkDotNet.Jobs;
 
 namespace Base58Encoding.Benchmarks;
 
-[SimpleJob(RuntimeMoniker.Net90)]
 [SimpleJob(RuntimeMoniker.Net10_0)]
 [HideColumns("Job", "Error", "StdDev", "Median", "RatioSD")]
 [MemoryDiagnoser]

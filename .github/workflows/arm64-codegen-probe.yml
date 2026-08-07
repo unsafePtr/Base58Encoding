@@ -1,0 +1,119 @@
+name: arm64 codegen probe
+
+# Diagnostic-only. VectorMath.MultiplyWidening32 falls through to the portable `x * y` on arm64
+# (Avx2/Sse2 are both unsupported there), and NEON has no 64-bit vector multiply, so the JIT has to
+# synthesise one. The open question is HOW: a vectorised umull-based decomposition, or a scalar
+# software fallback. dotnet/runtime#103555 fixed exactly this for x64 and says nothing about arm64.
+# This dumps the real arm64 disassembly so the answer comes from the machine, not from reasoning.
+
+on:
+  push:
+    branches: [ 'perf/**' ]
+  workflow_dispatch:
+
+jobs:
+  probe:
+    # Two arm64 microarchitectures from different vendors: Ampere/Neoverse-N2 on Linux and Apple
+    # Silicon on macOS. Both emit an identical 33-instruction sequence for each kernel, so the
+    # xtn/umull lowering is generic arm64 rather than a Neoverse-specific choice. Worth keeping as a
+    # pair: the JIT reports "generic ARM64 + SVE" on the Neoverse runner and plain "generic ARM64" on
+    # Apple, and Vector256 stays inactive on both (the only length gate emitted is cmp #2, the
+    # Vector128 one) — so even an SVE-capable arm64 host exercises only the Vector128 path.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04-arm
+            label: neoverse
+          - runner: macos-26
+            label: apple-silicon
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+
+    steps:
+    - uses: actions/checkout@v7
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v5
+      with:
+        dotnet-version: 10.0.x
+
+    # Branch on the tool rather than on exit status: "lscpu | sed ... || sysctl" silently does nothing
+    # useful on macOS, because the redirect applies to sed and the pipeline reports sed's status (0),
+    # so the fallback never runs and the chip model is never printed.
+    - name: Host
+      run: |
+        uname -m
+        if command -v lscpu >/dev/null 2>&1; then
+          lscpu | sed -n '1,20p'
+        else
+          sysctl -n machdep.cpu.brand_string hw.ncpu
+        fi
+
+    - name: Build
+      run: |
+        dotnet restore src/Base58Encoding.slnx
+        dotnet build src/Base58Encoding.slnx --configuration Release --no-restore
+
+    # DOTNET_JitDisasm works on the release runtime since .NET 8. TieredCompilation=0 skips tier-0 so
+    # the first call is already fully optimised. The filter must be NAMESPACE-QUALIFIED: a bare
+    # "VectorMath:*" matches nothing, because the JIT names the method
+    # "Base58Encoding.VectorMath:TensorDot". JitDisasmSummary is captured alongside so that, if the
+    # filter ever stops matching again, the log shows every method actually compiled.
+    # The codegen step below filters to *VectorMathTests* to keep the disassembly readable, so on its
+    # own it proves nothing about the rest of the library. The publish workflow runs the full suite on
+    # arm64, but only for master and PRs into it — never for perf/** branches. Run it here so an arm64
+    # lane-ordering bug cannot reach master unnoticed.
+    - name: Test (full suite, arm64)
+      run: |
+        dotnet run --project src/Base58Encoding.Tests/Base58Encoding.Tests.csproj \
+          --configuration Release --no-build
+
+    - name: Dump arm64 codegen for VectorMath
+      env:
+        DOTNET_JitDisasm: 'Base58Encoding.VectorMath:*'
+        DOTNET_JitDisasmSummary: '1'
+        DOTNET_TieredCompilation: '0'
+      run: |
+        dotnet run --project src/Base58Encoding.Tests/Base58Encoding.Tests.csproj \
+          --configuration Release --no-build -- -method "*VectorMathTests*" \
+          > arm64-codegen.txt 2>&1 || true
+        echo "----- captured $(wc -l < arm64-codegen.txt) lines -----"
+        echo "----- methods the JIT compiled from VectorMath -----"
+        grep -E 'JIT compiled Base58Encoding\.VectorMath' arm64-codegen.txt || echo "(none - were they inlined?)"
+
+    - name: Verdict
+      run: |
+        set -u
+        listings=$(grep -cE '^; Assembly listing for method' arm64-codegen.txt || true)
+        echo "assembly listings captured: $listings"
+        if [ "$listings" -eq 0 ]; then
+          echo "::error::No disassembly captured - the JitDisasm filter matched nothing, so the census below would be meaningless."
+          exit 1
+        fi
+
+        echo
+        echo "=== method headers ==="
+        grep -E '^; Assembly listing for method|^; Emitting|Total bytes of code' arm64-codegen.txt
+
+        echo
+        echo "=== instruction census (what the 64-bit multiply lowered to) ==="
+        for m in umull umull2 uzp1 uzp2 mul shl ushr usra add bl blr; do
+          printf '%-8s %s\n' "$m" "$(grep -cE "^[[:space:]]+$m( |$)" arm64-codegen.txt || true)"
+        done
+
+        echo
+        echo "=== calls out of the kernels (scalar software fallback would show here) ==="
+        grep -nE '^[[:space:]]+(bl|blr)( |$)' arm64-codegen.txt || echo "no calls - not scalarising"
+
+        echo
+        echo "=== every instruction in the two kernels ==="
+        sed -n '/^; Assembly listing for method Base58Encoding.VectorMath/,/^; Total bytes of code/p' arm64-codegen.txt
+
+    - name: Upload full dump
+      if: always()
+      uses: actions/upload-artifact@v7
+      with:
+        name: arm64-codegen-${{ matrix.label }}
+        path: arm64-codegen.txt

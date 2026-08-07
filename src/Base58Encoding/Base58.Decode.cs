@@ -2,8 +2,6 @@ using System.Buffers;
 using System.Buffers.Binary;
 using System.Numerics;
 using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
-using System.Runtime.Intrinsics;
 
 namespace Base58Encoding;
 
@@ -28,7 +26,7 @@ public sealed partial class Base58<TAlphabet>
             if (encoded.Length is >= 43 and <= 44)
             {
                 Span<byte> buf = stackalloc byte[32];
-                if (TryDecodeBitcoin32Fast(encoded, buf) == 32)
+                if (DecodeBitcoin32Fast(encoded, buf))
                 {
                     return buf.ToArray();
                 }
@@ -36,7 +34,7 @@ public sealed partial class Base58<TAlphabet>
             else if (encoded.Length is >= 87 and <= 88)
             {
                 Span<byte> buf = stackalloc byte[64];
-                if (TryDecodeBitcoin64Fast(encoded, buf) == 64)
+                if (DecodeBitcoin64Fast(encoded, buf))
                 {
                     return buf.ToArray();
                 }
@@ -84,25 +82,23 @@ public sealed partial class Base58<TAlphabet>
         return DecodeCore(encoded, destination);
     }
 
-    private int DecodeCore<TChar>(ReadOnlySpan<TChar> encoded, Span<byte> destination)
+    private static int DecodeCore<TChar>(ReadOnlySpan<TChar> encoded, Span<byte> destination)
         where TChar : unmanaged, IBinaryInteger<TChar>
     {
         if (typeof(TAlphabet) == typeof(BitcoinAlphabet))
         {
             if (encoded.Length is >= 43 and <= 44)
             {
-                int r = TryDecodeBitcoin32Fast(encoded, destination);
-                if (r >= 0)
+                if (DecodeBitcoin32Fast(encoded, destination))
                 {
-                    return r;
+                    return 32;
                 }
             }
             else if (encoded.Length is >= 87 and <= 88)
             {
-                int r = TryDecodeBitcoin64Fast(encoded, destination);
-                if (r >= 0)
+                if (DecodeBitcoin64Fast(encoded, destination))
                 {
-                    return r;
+                    return 64;
                 }
             }
         }
@@ -111,7 +107,7 @@ public sealed partial class Base58<TAlphabet>
     }
 
     [SkipLocalsInit]
-    private int DecodeGenericCore<TChar>(ReadOnlySpan<TChar> encoded, Span<byte> destination)
+    private static int DecodeGenericCore<TChar>(ReadOnlySpan<TChar> encoded, Span<byte> destination)
         where TChar : unmanaged, IBinaryInteger<TChar>
     {
         TChar firstChar = TChar.CreateTruncating(TAlphabet.FirstCharacter);
@@ -136,7 +132,7 @@ public sealed partial class Base58<TAlphabet>
         return DecodeGenericCoreLarge(encoded, leadingOnes, scratchSize, destination);
     }
 
-    private int DecodeGenericCoreLarge<TChar>(ReadOnlySpan<TChar> encoded, int leadingOnes, int scratchSize, Span<byte> destination)
+    private static int DecodeGenericCoreLarge<TChar>(ReadOnlySpan<TChar> encoded, int leadingOnes, int scratchSize, Span<byte> destination)
         where TChar : unmanaged, IBinaryInteger<TChar>
     {
         byte[] rented = ArrayPool<byte>.Shared.Rent(scratchSize);
@@ -160,7 +156,7 @@ public sealed partial class Base58<TAlphabet>
     }
 
     [SkipLocalsInit]
-    private byte[] DecodeGenericToArray<TChar>(ReadOnlySpan<TChar> encoded)
+    private static byte[] DecodeGenericToArray<TChar>(ReadOnlySpan<TChar> encoded)
         where TChar : unmanaged, IBinaryInteger<TChar>
     {
         TChar firstChar = TChar.CreateTruncating(TAlphabet.FirstCharacter);
@@ -185,7 +181,7 @@ public sealed partial class Base58<TAlphabet>
         return DecodeGenericToArrayLarge(encoded, leadingOnes, scratchSize);
     }
 
-    private byte[] DecodeGenericToArrayLarge<TChar>(ReadOnlySpan<TChar> encoded, int leadingOnes, int scratchSize)
+    private static byte[] DecodeGenericToArrayLarge<TChar>(ReadOnlySpan<TChar> encoded, int leadingOnes, int scratchSize)
         where TChar : unmanaged, IBinaryInteger<TChar>
     {
         byte[] rented = ArrayPool<byte>.Shared.Rent(scratchSize);
@@ -202,7 +198,7 @@ public sealed partial class Base58<TAlphabet>
         }
     }
 
-    private int ComputeGenericDecode<TChar>(ReadOnlySpan<TChar> encoded, int leadingOnes, Span<byte> digits)
+    private static int ComputeGenericDecode<TChar>(ReadOnlySpan<TChar> encoded, int leadingOnes, Span<byte> digits)
         where TChar : unmanaged, IBinaryInteger<TChar>
     {
         int decodedLength = 1;
@@ -254,12 +250,12 @@ public sealed partial class Base58<TAlphabet>
     }
 
     /// <summary>
-    /// Returns bytes written (32) on success, or -1 if the encoded input doesn't
-    /// represent exactly 32 bytes (caller should fall back to generic decode).
-    /// Throws on invalid character or insufficient destination when fast path matches.
+    /// Writes exactly 32 bytes and returns true on success, or false if the encoded input does not
+    /// represent exactly 32 bytes, in which case the caller falls back to the generic decode.
+    /// Throws on an invalid character, or on insufficient destination once the fast path commits.
     /// </summary>
     [SkipLocalsInit]
-    internal static int TryDecodeBitcoin32Fast<TChar>(ReadOnlySpan<TChar> encoded, Span<byte> destination)
+    internal static bool DecodeBitcoin32Fast<TChar>(ReadOnlySpan<TChar> encoded, Span<byte> destination)
         where TChar : unmanaged, IBinaryInteger<TChar>
     {
         int charCount = encoded.Length;
@@ -270,23 +266,18 @@ public sealed partial class Base58<TAlphabet>
 
         // Prepend zeros to make exactly Raw58Sz32 characters
         int prepend0 = Base58BitcoinTables.Raw58Sz32 - charCount;
-        for (int j = 0; j < Base58BitcoinTables.Raw58Sz32; j++)
-        {
-            if (j < prepend0)
-            {
-                rawBase58[j] = 0;
-            }
-            else
-            {
-                int c = int.CreateTruncating(encoded[j - prepend0]);
-                // Validate + convert using Bitcoin decode table
-                if ((uint)c >= 128 || bitcoinDecodeTable[c] == 255)
-                {
-                    ThrowHelper.ThrowInvalidCharacter((char)c);
-                }
+        rawBase58[..prepend0].Clear();
 
-                rawBase58[j] = bitcoinDecodeTable[c];
+        for (int i = 0; i < charCount; i++)
+        {
+            int c = int.CreateTruncating(encoded[i]);
+            // Validate + convert using Bitcoin decode table
+            if ((uint)c >= 128 || bitcoinDecodeTable[c] == 255)
+            {
+                ThrowHelper.ThrowInvalidCharacter((char)c);
             }
+
+            rawBase58[prepend0 + i] = bitcoinDecodeTable[c];
         }
 
         // Convert to intermediate format (base 58^5)
@@ -306,7 +297,7 @@ public sealed partial class Base58<TAlphabet>
 
         for (int j = 0; j < Base58BitcoinTables.BinarySz32; j++)
         {
-            binary[j] = TensorDot(intermediate, Base58BitcoinTables.DecodeTable32.AsSpan(j * Base58BitcoinTables.IntermediateSz32, Base58BitcoinTables.IntermediateSz32));
+            binary[j] = VectorMath.TensorDot(intermediate, Base58BitcoinTables.DecodeTable32.AsSpan(j * Base58BitcoinTables.IntermediateSz32, Base58BitcoinTables.IntermediateSz32));
         }
 
         // Reduce each term to less than 2^32
@@ -319,7 +310,7 @@ public sealed partial class Base58<TAlphabet>
         // Check if the result is too large for 32 bytes
         if (binary[0] > 0xFFFFFFFFUL)
         {
-            return -1;
+            return false;
         }
 
         // Count leading zero bytes in the output directly from binary[] without materializing it.
@@ -343,7 +334,7 @@ public sealed partial class Base58<TAlphabet>
 
         if (outputLeadingZeros != inputLeadingOnes)
         {
-            return -1;
+            return false;
         }
 
         if (destination.Length < 32)
@@ -359,11 +350,11 @@ public sealed partial class Base58<TAlphabet>
             BinaryPrimitives.WriteUInt32BigEndian(destination.Slice(offset, sizeof(uint)), value);
         }
 
-        return 32;
+        return true;
     }
 
     [SkipLocalsInit]
-    internal static int TryDecodeBitcoin64Fast<TChar>(ReadOnlySpan<TChar> encoded, Span<byte> destination)
+    internal static bool DecodeBitcoin64Fast<TChar>(ReadOnlySpan<TChar> encoded, Span<byte> destination)
         where TChar : unmanaged, IBinaryInteger<TChar>
     {
         int charCount = encoded.Length;
@@ -374,23 +365,18 @@ public sealed partial class Base58<TAlphabet>
 
         // Prepend zeros to make exactly Raw58Sz64 characters
         int prepend0 = Base58BitcoinTables.Raw58Sz64 - charCount;
-        for (int j = 0; j < Base58BitcoinTables.Raw58Sz64; j++)
-        {
-            if (j < prepend0)
-            {
-                rawBase58[j] = 0;
-            }
-            else
-            {
-                int c = int.CreateTruncating(encoded[j - prepend0]);
-                // Validate + convert using Bitcoin decode table
-                if ((uint)c >= 128 || bitcoinDecodeTable[c] == 255)
-                {
-                    ThrowHelper.ThrowInvalidCharacter((char)c);
-                }
+        rawBase58[..prepend0].Clear();
 
-                rawBase58[j] = bitcoinDecodeTable[c];
+        for (int i = 0; i < charCount; i++)
+        {
+            int c = int.CreateTruncating(encoded[i]);
+            // Validate + convert using Bitcoin decode table
+            if ((uint)c >= 128 || bitcoinDecodeTable[c] == 255)
+            {
+                ThrowHelper.ThrowInvalidCharacter((char)c);
             }
+
+            rawBase58[prepend0 + i] = bitcoinDecodeTable[c];
         }
 
         // Convert to intermediate format (base 58^5)
@@ -410,7 +396,7 @@ public sealed partial class Base58<TAlphabet>
 
         for (int j = 0; j < Base58BitcoinTables.BinarySz64; j++)
         {
-            binary[j] = TensorDot(intermediate, Base58BitcoinTables.DecodeTable64.AsSpan(j * Base58BitcoinTables.IntermediateSz64, Base58BitcoinTables.IntermediateSz64));
+            binary[j] = VectorMath.TensorDot(intermediate, Base58BitcoinTables.DecodeTable64.AsSpan(j * Base58BitcoinTables.IntermediateSz64, Base58BitcoinTables.IntermediateSz64));
         }
 
         // Reduce each term to less than 2^32
@@ -423,7 +409,7 @@ public sealed partial class Base58<TAlphabet>
         // Check if the result is too large for 64 bytes
         if (binary[0] > 0xFFFFFFFFUL)
         {
-            return -1;
+            return false;
         }
 
         // Count leading zero bytes in the output directly from binary[] without materializing it.
@@ -447,7 +433,7 @@ public sealed partial class Base58<TAlphabet>
 
         if (outputLeadingZeros != inputLeadingOnes)
         {
-            return -1;
+            return false;
         }
 
         if (destination.Length < 64)
@@ -463,78 +449,18 @@ public sealed partial class Base58<TAlphabet>
             BinaryPrimitives.WriteUInt32BigEndian(destination.Slice(offset, sizeof(uint)), value);
         }
 
-        return 64;
+        return true;
     }
 
     internal static byte[]? DecodeBitcoin32Fast(ReadOnlySpan<char> encoded)
     {
         Span<byte> buffer = stackalloc byte[32];
-        int r = TryDecodeBitcoin32Fast<char>(encoded, buffer);
-        return r < 0 ? null : buffer.ToArray();
+        return DecodeBitcoin32Fast<char>(encoded, buffer) ? buffer.ToArray() : null;
     }
 
     internal static byte[]? DecodeBitcoin64Fast(ReadOnlySpan<char> encoded)
     {
         Span<byte> buffer = stackalloc byte[64];
-        int r = TryDecodeBitcoin64Fast<char>(encoded, buffer);
-        return r < 0 ? null : buffer.ToArray();
-    }
-
-    // Vectorized dot product of two equal-length ulong spans: sum(x[i] * y[i]).
-    // A focused, dependency-free stand-in for TensorPrimitives.Dot<ulong>, tuned for the small
-    // fixed-length decode columns (IntermediateSz32/64). Widest available width first, then a
-    // scalar tail / fallback. The ulong multiply-accumulate wraps identically to the scalar loop,
-    // so results are bit-for-bit the same.
-    //
-    // A fully bounds-checked (safe) rewrite is possible on .NET 11+ using the consume-and-advance
-    // idiom — guard every span and advance by re-slicing:
-    //     while (x.Length >= Vector256<ulong>.Count && y.Length >= Vector256<ulong>.Count)
-    //     {
-    //         acc += Vector256.Create(x) * Vector256.Create(y);
-    //         x = x.Slice(Vector256<ulong>.Count);
-    //         y = y.Slice(Vector256<ulong>.Count);
-    //     }
-    // On .NET 11 it JITs bounds-check-free and reaches parity on arm64, but on x64 the JIT still
-    // emits a redundant second length guard per iteration (the spans are equal-length, but it can't
-    // prove it), so it runs ~13-33% slower at the short lengths this kernel uses (9/18). On .NET 10
-    // it is slower on every architecture. Staying on LoadUnsafe until the x64 check is elided.
-    // Benchmark (our exact kernels, by @EgorBo): https://github.com/EgorBot/Benchmarks/issues/401
-    private static ulong TensorDot(ReadOnlySpan<ulong> x, ReadOnlySpan<ulong> y)
-    {
-        ref ulong xr = ref MemoryMarshal.GetReference(x);
-        ref ulong yr = ref MemoryMarshal.GetReference(y);
-        int len = x.Length;
-        int i = 0;
-        ulong sum = 0UL;
-
-        if (Vector256.IsHardwareAccelerated && len >= Vector256<ulong>.Count)
-        {
-            Vector256<ulong> acc = Vector256<ulong>.Zero;
-            int upper = len - Vector256<ulong>.Count;
-            for (; i <= upper; i += Vector256<ulong>.Count)
-            {
-                acc += Vector256.LoadUnsafe(ref xr, (nuint)i) * Vector256.LoadUnsafe(ref yr, (nuint)i);
-            }
-
-            sum += Vector256.Sum(acc);
-        }
-        else if (Vector128.IsHardwareAccelerated && len >= Vector128<ulong>.Count)
-        {
-            Vector128<ulong> acc = Vector128<ulong>.Zero;
-            int upper = len - Vector128<ulong>.Count;
-            for (; i <= upper; i += Vector128<ulong>.Count)
-            {
-                acc += Vector128.LoadUnsafe(ref xr, (nuint)i) * Vector128.LoadUnsafe(ref yr, (nuint)i);
-            }
-
-            sum += Vector128.Sum(acc);
-        }
-
-        for (; i < len; i++)
-        {
-            sum += Unsafe.Add(ref xr, i) * Unsafe.Add(ref yr, i);
-        }
-
-        return sum;
+        return DecodeBitcoin64Fast<char>(encoded, buffer) ? buffer.ToArray() : null;
     }
 }

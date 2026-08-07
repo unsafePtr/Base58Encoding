@@ -92,6 +92,80 @@ public class Base58DecodeFast
         Assert.Throws<ArgumentException>(() => Base58.DecodeBitcoin32Fast(input));
     }
 
+    // The fast paths are chosen purely by encoded LENGTH, but the base58 length ranges are wider than
+    // the byte counts they map to: 88 characters hold up to 58^88-1 (~2^515.5) while 64 bytes hold
+    // 2^512-1, and 44 characters hold ~2^257.8 while 32 bytes hold 2^256-1. So a perfectly well-formed
+    // string of fast-path length can still encode a value that does not fit, and the fast decoders must
+    // reject it (via the `binary[0] > 0xFFFFFFFF` carry check) so the caller falls back to the generic
+    // decoder. Without that check Decode would silently return the wrong byte count for roughly 93% of
+    // 88-character and 72% of 44-character inputs.
+
+    // An over-large input can be rejected by either of two guards, depending on the value:
+    //   * the carry guard, `binary[0] > 0xFFFFFFFF`
+    //   * the leading-zero cross-check, `outputLeadingZeros != inputLeadingOnes`
+    // 2^512 exactly trips the SECOND one — its top limb is 2^32, whose low 32 bits are zero, so every
+    // limb looks like a leading zero byte. To exercise the carry guard the top limb's low 32 bits must
+    // be large, hence the 0xFF in the second byte below.
+    [Fact]
+    public void Decode64Fast_RejectsValueTooLargeFor64Bytes()
+    {
+        var largestValid = new byte[64];
+        Array.Fill(largestValid, (byte)0xFF); // 2^512 - 1, the largest 64-byte value
+
+        var tooLarge = new byte[65];
+        tooLarge[0] = 0x01;
+        tooLarge[1] = 0xFF; // 2^512 + 0xFF * 2^504 — needs 65 bytes, still encodes to 88 chars
+
+        string validEncoded = Base58.Bitcoin.Encode(largestValid);
+        string tooLargeEncoded = Base58.Bitcoin.Encode(tooLarge);
+        Assert.Equal(88, validEncoded.Length);
+        Assert.Equal(88, tooLargeEncoded.Length); // same length, different byte count
+
+        Assert.Equal(largestValid, Base58.DecodeBitcoin64Fast(validEncoded));
+        Assert.Null(Base58.DecodeBitcoin64Fast(tooLargeEncoded));
+
+        // The public API must fall back to the generic decoder and return all 65 bytes.
+        Assert.Equal(tooLarge, Base58.Bitcoin.Decode(tooLargeEncoded));
+    }
+
+    [Fact]
+    public void Decode32Fast_RejectsValueTooLargeFor32Bytes()
+    {
+        var largestValid = new byte[32];
+        Array.Fill(largestValid, (byte)0xFF); // 2^256 - 1
+
+        var tooLarge = new byte[33];
+        tooLarge[0] = 0x01;
+        tooLarge[1] = 0xFF; // 2^256 + 0xFF * 2^248
+
+        string validEncoded = Base58.Bitcoin.Encode(largestValid);
+        string tooLargeEncoded = Base58.Bitcoin.Encode(tooLarge);
+        Assert.Equal(44, validEncoded.Length);
+        Assert.Equal(44, tooLargeEncoded.Length);
+
+        Assert.Equal(largestValid, Base58.DecodeBitcoin32Fast(validEncoded));
+        Assert.Null(Base58.DecodeBitcoin32Fast(tooLargeEncoded));
+
+        Assert.Equal(tooLarge, Base58.Bitcoin.Decode(tooLargeEncoded));
+    }
+
+    // The extreme case: every digit at its maximum. Asserts the decoded VALUE, not just the length, so
+    // a fallback that returned the right size but wrong bytes would still fail.
+    [Theory]
+    [InlineData(88, 65)] // 58^88 - 1 needs 65 bytes
+    [InlineData(44, 33)] // 58^44 - 1 needs 33 bytes
+    public void Decode_AllMaxDigitsAtFastPathLength_FallsBackToGeneric(int chars, int expectedBytes)
+    {
+        string maxAtLength = new('z', chars); // 'z' is digit 57, so this is 58^chars - 1
+
+        byte[] decoded = Base58.Bitcoin.Decode(maxAtLength);
+
+        Assert.Equal(expectedBytes, decoded.Length);
+        Assert.Equal(
+            System.Numerics.BigInteger.Pow(58, chars) - 1,
+            new System.Numerics.BigInteger(decoded, isUnsigned: true, isBigEndian: true));
+    }
+
     [Fact]
     public void Decode32Fast_WithLeadingOnes_HandlesCorrectly()
     {

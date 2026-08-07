@@ -5,6 +5,7 @@
   <ItemGroup>
     <PackageVersion Include="BenchmarkDotNet" Version="0.15.8" />
     <PackageVersion Include="Microsoft.Testing.Extensions.CodeCoverage" Version="18.1.0" />
+    <!-- Held at 5.6.2: 5.6.3's encoder truncates at 128-char output (ssg/SimpleBase#87). -->
     <PackageVersion Include="SimpleBase" Version="5.6.2" />
     <PackageVersion Include="System.Numerics.Tensors" Version="10.0.10" />
     <PackageVersion Include="xunit.v3.mtp-v2" Version="3.2.2" />
