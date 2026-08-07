@@ -12,8 +12,9 @@ public class BigEndianTests
     }
 
     /// <summary>
-    /// Alternatively can be run manually to verify compatibility on big-endian systems using below command
-    /// docker run -it --rm --platform linux/s390x -v ProjectPath/src:/src registry.access.redhat.com/dotnet/sdk:10.0 sh -c "cd /src/Base58Encoding.Tests && dotnet run"
+    /// Alternatively can be run manually to verify compatibility on big-endian systems using below command.
+    /// Mount the NuGet cache too: restore over the network sometimes hangs under s390x emulation.
+    /// docker run -it --rm --platform linux/s390x -v ProjectPath/src:/src -v HomeDir/.nuget/packages:/nuget -e NUGET_PACKAGES=/nuget registry.access.redhat.com/dotnet/sdk:10.0 sh -c "cd /src/Base58Encoding.Tests &amp;&amp; dotnet run"
     /// </summary>
     [Fact(Skip = "For local usage only")]
     public void Base58Encoding_Works_On_BigEndian_ViaProcess()
