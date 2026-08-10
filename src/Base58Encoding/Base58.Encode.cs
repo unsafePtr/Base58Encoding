@@ -72,7 +72,7 @@ public sealed partial class Base58<TAlphabet>
         }
 
         ReadOnlySpan<byte> inputSpan = data[leadingZeros..];
-        int size = inputSpan.Length * 137 / 100 + 1;
+        int size = Base58.GetMaxEncodedLength(inputSpan.Length);
 
         if (size <= MaxStackallocByte)
         {
@@ -117,7 +117,7 @@ public sealed partial class Base58<TAlphabet>
         }
 
         ReadOnlySpan<byte> inputSpan = data[leadingZeros..];
-        int size = inputSpan.Length * 137 / 100 + 1;
+        int size = Base58.GetMaxEncodedLength(inputSpan.Length);
 
         if (size <= MaxStackallocByte)
         {

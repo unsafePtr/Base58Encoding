@@ -21,4 +21,10 @@ internal static class ThrowHelper
     {
         throw new ArgumentOutOfRangeException(paramName, "Length must be non-negative.");
     }
+
+    [DoesNotReturn]
+    public static void ThrowInputTooLarge(string paramName)
+    {
+        throw new ArgumentOutOfRangeException(paramName, "Input is too large: the encoded length would exceed Int32.MaxValue.");
+    }
 }
