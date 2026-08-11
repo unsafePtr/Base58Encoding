@@ -276,16 +276,7 @@ public sealed partial class Base58<TAlphabet>
         }
 
         // Convert intermediate form to raw base58 digits (5 digits per limb)
-        for (int i = 0; i < Base58BitcoinTables.IntermediateSz32; i++)
-        {
-            uint v = (uint)intermediate[i];
-
-            rawBase58[5 * i + 4] = (byte)((v / 1U) % 58U);
-            rawBase58[5 * i + 3] = (byte)((v / 58U) % 58U);
-            rawBase58[5 * i + 2] = (byte)((v / 3364U) % 58U);
-            rawBase58[5 * i + 1] = (byte)((v / 195112U) % 58U);
-            rawBase58[5 * i + 0] = (byte)(v / 11316496U);
-        }
+        VectorMath.ExtractBase58Digits(intermediate, rawBase58);
 
         // Count leading zeros in raw output — some come from input zero bytes,
         // some are mathematical padding (45-digit form slightly overshoots 44 chars max).
@@ -398,20 +389,11 @@ public sealed partial class Base58<TAlphabet>
         }
 
         // Convert intermediate form to raw base58 digits (5 digits per limb)
-        for (int i = 0; i < Base58BitcoinTables.IntermediateSz64; i++)
-        {
-            uint v = (uint)intermediate[i];
-            rawBase58[5 * i + 4] = (byte)((v / 1U) % 58U);
-            rawBase58[5 * i + 3] = (byte)((v / 58U) % 58U);
-            rawBase58[5 * i + 2] = (byte)((v / 3364U) % 58U);
-            rawBase58[5 * i + 1] = (byte)((v / 195112U) % 58U);
-            rawBase58[5 * i + 0] = (byte)(v / 11316496U);
+        VectorMath.ExtractBase58Digits(intermediate, rawBase58);
 
-            Debug.Assert(rawBase58[5 * i + 0] < 58 && rawBase58[5 * i + 1] < 58 &&
-                         rawBase58[5 * i + 2] < 58 && rawBase58[5 * i + 3] < 58 &&
-                         rawBase58[5 * i + 4] < 58,
-                         $"Invalid base58 digit generated at position {i} - algorithm bug");
-        }
+        Debug.Assert(
+            !rawBase58.ContainsAnyExceptInRange((byte)0, (byte)57),
+            "Invalid base58 digit generated - algorithm bug");
 
         int rawLeadingZeros = 0;
         for (; rawLeadingZeros < Base58BitcoinTables.Raw58Sz64; rawLeadingZeros++)

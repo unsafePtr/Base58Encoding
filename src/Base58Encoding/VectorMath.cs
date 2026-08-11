@@ -77,6 +77,135 @@ internal static class VectorMath
         return x * y;
     }
 
+    // Reciprocals for the four base-58 divisors, as multiplier / shift pairs: floor(v / d) equals
+    // (v * multiplier) >> shift for every v below 58^5. Each multiplier is ceil(2^shift / d) with the
+    // shift chosen so the rounding error stays under one across the whole domain, and each pair was
+    // checked against the true quotient for all 656,356,768 legal limb values, so they are proven for
+    // every input this kernel can see rather than argued from an error bound. Every multiplier is
+    // under 2^32, which is what lets MultiplyWidening32 do the multiply in one instruction.
+    private const ulong Recip58 = 592409283UL;
+    private const int Recip58Shift = 35;
+    private const ulong Recip3364 = 326846501UL;
+    private const int Recip3364Shift = 40;
+    private const ulong Recip195112 = 11270569UL;
+    private const int Recip195112Shift = 41;
+    private const ulong Recip11316496 = 795935355UL;
+    private const int Recip11316496Shift = 53;
+
+    /// <summary>
+    /// Expands each base-58^5 limb into five base-58 digits, most significant first, writing
+    /// <c>5 * intermediate.Length</c> digits into <paramref name="raw"/>. Firedancer's
+    /// <c>intermediate_to_raw</c>.
+    /// </summary>
+    /// <remarks>
+    /// The scalar form costs four constant divisions and four remainders per limb. Two things make
+    /// the vector form cheaper. The four quotients come from lane-wise reciprocal multiplication, all
+    /// four issued independently off the same limb rather than chained. And the remainders never need
+    /// a second division, because consecutive quotients differ by exactly one base-58 digit:
+    /// <c>q_k % 58 == q_k - 58 * q_(k-1)</c>, so a multiply and a subtract replace each mod. Each
+    /// lane then holds its limb's five digits in its low five bytes, in output order, so the store is
+    /// one unaligned uint plus one byte instead of five byte stores — which is also why the packed
+    /// store is gated on little-endian byte order.
+    /// </remarks>
+    internal static void ExtractBase58Digits(ReadOnlySpan<ulong> intermediate, Span<byte> raw)
+    {
+        Debug.Assert(raw.Length == intermediate.Length * 5, "raw must hold exactly five digits per limb");
+
+        ref ulong src = ref MemoryMarshal.GetReference(intermediate);
+        ref byte dst = ref MemoryMarshal.GetReference(raw);
+        int len = intermediate.Length;
+        int i = 0;
+
+        if (BitConverter.IsLittleEndian)
+        {
+            if (Vector256.IsHardwareAccelerated && len >= Vector256<ulong>.Count)
+            {
+                int upper = len - Vector256<ulong>.Count;
+                for (; i <= upper; i += Vector256<ulong>.Count)
+                {
+                    Vector256<ulong> v = Vector256.LoadUnsafe(ref src, (nuint)i);
+
+                    Vector256<ulong> q3 = Vector256.ShiftRightLogical(MultiplyWidening32(v, Vector256.Create(Recip58)), Recip58Shift);
+                    Vector256<ulong> q2 = Vector256.ShiftRightLogical(MultiplyWidening32(v, Vector256.Create(Recip3364)), Recip3364Shift);
+                    Vector256<ulong> q1 = Vector256.ShiftRightLogical(MultiplyWidening32(v, Vector256.Create(Recip195112)), Recip195112Shift);
+                    Vector256<ulong> q0 = Vector256.ShiftRightLogical(MultiplyWidening32(v, Vector256.Create(Recip11316496)), Recip11316496Shift);
+
+                    Vector256<ulong> c58 = Vector256.Create(58UL);
+                    Vector256<ulong> packed =
+                        q0
+                        | Vector256.ShiftLeft(q1 - MultiplyWidening32(q0, c58), 8)
+                        | Vector256.ShiftLeft(q2 - MultiplyWidening32(q1, c58), 16)
+                        | Vector256.ShiftLeft(q3 - MultiplyWidening32(q2, c58), 24)
+                        | Vector256.ShiftLeft(v - MultiplyWidening32(q3, c58), 32);
+
+                    StorePackedDigits(packed, ref dst, i);
+                }
+            }
+            else if (Vector128.IsHardwareAccelerated && len >= Vector128<ulong>.Count)
+            {
+                int upper = len - Vector128<ulong>.Count;
+                for (; i <= upper; i += Vector128<ulong>.Count)
+                {
+                    Vector128<ulong> v = Vector128.LoadUnsafe(ref src, (nuint)i);
+
+                    Vector128<ulong> q3 = Vector128.ShiftRightLogical(MultiplyWidening32(v, Vector128.Create(Recip58)), Recip58Shift);
+                    Vector128<ulong> q2 = Vector128.ShiftRightLogical(MultiplyWidening32(v, Vector128.Create(Recip3364)), Recip3364Shift);
+                    Vector128<ulong> q1 = Vector128.ShiftRightLogical(MultiplyWidening32(v, Vector128.Create(Recip195112)), Recip195112Shift);
+                    Vector128<ulong> q0 = Vector128.ShiftRightLogical(MultiplyWidening32(v, Vector128.Create(Recip11316496)), Recip11316496Shift);
+
+                    Vector128<ulong> c58 = Vector128.Create(58UL);
+                    Vector128<ulong> packed =
+                        q0
+                        | Vector128.ShiftLeft(q1 - MultiplyWidening32(q0, c58), 8)
+                        | Vector128.ShiftLeft(q2 - MultiplyWidening32(q1, c58), 16)
+                        | Vector128.ShiftLeft(q3 - MultiplyWidening32(q2, c58), 24)
+                        | Vector128.ShiftLeft(v - MultiplyWidening32(q3, c58), 32);
+
+                    StorePackedDigits(packed, ref dst, i);
+                }
+            }
+        }
+
+        for (; i < len; i++)
+        {
+            uint v = (uint)Unsafe.Add(ref src, i);
+            int at = 5 * i;
+            Unsafe.Add(ref dst, at + 4) = (byte)(v % 58U);
+            Unsafe.Add(ref dst, at + 3) = (byte)(v / 58U % 58U);
+            Unsafe.Add(ref dst, at + 2) = (byte)(v / 3364U % 58U);
+            Unsafe.Add(ref dst, at + 1) = (byte)(v / 195112U % 58U);
+            Unsafe.Add(ref dst, at + 0) = (byte)(v / 11316496U);
+        }
+    }
+
+    // Each lane carries five digits in its low five bytes, already in output order, so on a
+    // little-endian machine the four low ones go out as a single unaligned uint store. Lane indices
+    // are constants so each read is one extract rather than an indexed spill to the stack.
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void StorePackedDigits(Vector256<ulong> packed, ref byte dst, int limbIndex)
+    {
+        StoreLane(packed.GetElement(0), ref dst, limbIndex + 0);
+        StoreLane(packed.GetElement(1), ref dst, limbIndex + 1);
+        StoreLane(packed.GetElement(2), ref dst, limbIndex + 2);
+        StoreLane(packed.GetElement(3), ref dst, limbIndex + 3);
+    }
+
+    /// <inheritdoc cref="StorePackedDigits(Vector256{ulong}, ref byte, int)"/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void StorePackedDigits(Vector128<ulong> packed, ref byte dst, int limbIndex)
+    {
+        StoreLane(packed.GetElement(0), ref dst, limbIndex + 0);
+        StoreLane(packed.GetElement(1), ref dst, limbIndex + 1);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void StoreLane(ulong packedLane, ref byte dst, int limbIndex)
+    {
+        int at = 5 * limbIndex;
+        Unsafe.WriteUnaligned(ref Unsafe.Add(ref dst, at), (uint)packedLane);
+        Unsafe.Add(ref dst, at + 4) = (byte)(packedLane >> 32);
+    }
+
     // Vectorized dot product of two equal-length ulong spans: sum(x[i] * y[i]).
     // A focused, dependency-free stand-in for TensorPrimitives.Dot<ulong>, tuned for the small
     // fixed-length decode columns (IntermediateSz32/64). Widest available width first, then a
