@@ -72,31 +72,38 @@ public sealed partial class Base58<TAlphabet>
         }
 
         ReadOnlySpan<byte> inputSpan = data[leadingZeros..];
-        int size = Base58.GetMaxEncodedLength(inputSpan.Length);
+        int rawSize = GetGenericRawSize(inputSpan.Length);
 
-        if (size <= MaxStackallocByte)
+        if (rawSize <= MaxStackallocByte)
         {
-            Span<byte> digits = stackalloc byte[size];
-            int digitCount = ComputeGenericDigits(inputSpan, digits);
-            var state = new EncodeState<TAlphabet>(digits, 0, digitCount, leadingZeros);
-            return string.Create(state.OutputLength, state, static (span, s) => s.EmitReverse(span));
+            Span<uint> limbs = stackalloc uint[rawSize / Base58Pow5Digits];
+            Span<byte> raw = stackalloc byte[rawSize];
+            int rawLeadingZeros = ComputeGenericRaw(inputSpan, limbs, raw);
+            var state = new EncodeState<TAlphabet>(raw, rawLeadingZeros, rawSize - rawLeadingZeros, leadingZeros);
+            return string.Create(state.OutputLength, state, static (span, s) => s.EmitForward(span));
         }
 
-        return EncodeGenericToStringLarge(inputSpan, leadingZeros, size);
+        return EncodeGenericToStringLarge(inputSpan, leadingZeros, rawSize);
     }
 
-    private static string EncodeGenericToStringLarge(ReadOnlySpan<byte> inputSpan, int leadingZeros, int size)
+    private static string EncodeGenericToStringLarge(ReadOnlySpan<byte> inputSpan, int leadingZeros, int rawSize)
     {
-        byte[] rented = ArrayPool<byte>.Shared.Rent(size);
+        int limbCapacity = rawSize / Base58Pow5Digits;
+        byte[] rentedRaw = ArrayPool<byte>.Shared.Rent(rawSize);
+        uint[] rentedLimbs = ArrayPool<uint>.Shared.Rent(limbCapacity);
         try
         {
-            int digitCount = ComputeGenericDigits(inputSpan, rented);
-            var state = new EncodeState<TAlphabet>(rented, 0, digitCount, leadingZeros);
-            return string.Create(state.OutputLength, state, static (span, s) => s.EmitReverse(span));
+            // Rent overshoots, and the raw layout is right-aligned in exactly rawSize digits,
+            // so both buffers must be sliced back to the requested size.
+            Span<byte> raw = rentedRaw.AsSpan(0, rawSize);
+            int rawLeadingZeros = ComputeGenericRaw(inputSpan, rentedLimbs.AsSpan(0, limbCapacity), raw);
+            var state = new EncodeState<TAlphabet>(raw, rawLeadingZeros, rawSize - rawLeadingZeros, leadingZeros);
+            return string.Create(state.OutputLength, state, static (span, s) => s.EmitForward(span));
         }
         finally
         {
-            ArrayPool<byte>.Shared.Return(rented);
+            ArrayPool<uint>.Shared.Return(rentedLimbs);
+            ArrayPool<byte>.Shared.Return(rentedRaw);
         }
     }
 
@@ -117,72 +124,146 @@ public sealed partial class Base58<TAlphabet>
         }
 
         ReadOnlySpan<byte> inputSpan = data[leadingZeros..];
-        int size = Base58.GetMaxEncodedLength(inputSpan.Length);
+        int rawSize = GetGenericRawSize(inputSpan.Length);
 
-        if (size <= MaxStackallocByte)
+        if (rawSize <= MaxStackallocByte)
         {
-            Span<byte> digits = stackalloc byte[size];
-            int digitCount = ComputeGenericDigits(inputSpan, digits);
+            Span<uint> limbs = stackalloc uint[rawSize / Base58Pow5Digits];
+            Span<byte> raw = stackalloc byte[rawSize];
+            int rawLeadingZeros = ComputeGenericRaw(inputSpan, limbs, raw);
+            int digitCount = rawSize - rawLeadingZeros;
             int outputLength = leadingZeros + digitCount;
             if (destination.Length < outputLength)
             {
                 ThrowHelper.ThrowDestinationTooSmall(nameof(destination));
             }
 
-            var state = new EncodeState<TAlphabet>(digits, 0, digitCount, leadingZeros);
-            state.EmitReverse(destination);
+            var state = new EncodeState<TAlphabet>(raw, rawLeadingZeros, digitCount, leadingZeros);
+            state.EmitForward(destination);
             return outputLength;
         }
 
-        return EncodeGenericToBytesLarge(inputSpan, leadingZeros, size, destination);
+        return EncodeGenericToBytesLarge(inputSpan, leadingZeros, rawSize, destination);
     }
 
-    private static int EncodeGenericToBytesLarge(ReadOnlySpan<byte> inputSpan, int leadingZeros, int size, Span<byte> destination)
+    private static int EncodeGenericToBytesLarge(ReadOnlySpan<byte> inputSpan, int leadingZeros, int rawSize, Span<byte> destination)
     {
-        byte[] rented = ArrayPool<byte>.Shared.Rent(size);
+        int limbCapacity = rawSize / Base58Pow5Digits;
+        byte[] rentedRaw = ArrayPool<byte>.Shared.Rent(rawSize);
+        uint[] rentedLimbs = ArrayPool<uint>.Shared.Rent(limbCapacity);
         try
         {
-            int digitCount = ComputeGenericDigits(inputSpan, rented);
+            Span<byte> raw = rentedRaw.AsSpan(0, rawSize);
+            int rawLeadingZeros = ComputeGenericRaw(inputSpan, rentedLimbs.AsSpan(0, limbCapacity), raw);
+            int digitCount = rawSize - rawLeadingZeros;
             int outputLength = leadingZeros + digitCount;
             if (destination.Length < outputLength)
             {
                 ThrowHelper.ThrowDestinationTooSmall(nameof(destination));
             }
 
-            var state = new EncodeState<TAlphabet>(rented, 0, digitCount, leadingZeros);
-            state.EmitReverse(destination);
+            var state = new EncodeState<TAlphabet>(raw, rawLeadingZeros, digitCount, leadingZeros);
+            state.EmitForward(destination);
             return outputLength;
         }
         finally
         {
-            ArrayPool<byte>.Shared.Return(rented);
+            ArrayPool<uint>.Shared.Return(rentedLimbs);
+            ArrayPool<byte>.Shared.Return(rentedRaw);
         }
     }
 
-    private static int ComputeGenericDigits(ReadOnlySpan<byte> inputSpan, Span<byte> digits)
+    /// <summary>
+    /// Scratch geometry for the generic path. The value is built in base 58^5 — the largest power
+    /// of 58 that fits a <see cref="uint"/> — so one limb expands to exactly five base-58 digits and
+    /// the raw digit buffer is the digit bound rounded up to a multiple of five.
+    /// </summary>
+    private static int GetGenericRawSize(int byteCount)
     {
-        int digitCount = 1;
-        digits[0] = 0;
+        long rawSize = ((long)Base58.GetMaxEncodedLength(byteCount) + (Base58Pow5Digits - 1))
+                       / Base58Pow5Digits * Base58Pow5Digits;
 
-        foreach (byte b in inputSpan)
+        if (rawSize > int.MaxValue)
         {
-            int carry = b;
+            ThrowHelper.ThrowInputTooLarge(nameof(byteCount));
+        }
 
-            for (int i = 0; i < digitCount; i++)
+        return (int)rawSize;
+    }
+
+    /// <summary>
+    /// Builds <paramref name="inputSpan"/> as a base-58^5 number in <paramref name="limbs"/> (least
+    /// significant first), then expands every limb into five base-58 digits written most significant
+    /// first and right-aligned in <paramref name="raw"/>. Returns the count of leading zero digits.
+    /// </summary>
+    /// <remarks>
+    /// Consuming four input bytes per outer step and five output digits per limb keeps the inner
+    /// carry loop roughly an order of magnitude shorter than a byte-at-a-time base-58 schoolbook
+    /// pass, which is what dominates this path for the common 25-byte and 34-byte inputs.
+    /// </remarks>
+    private static int ComputeGenericRaw(ReadOnlySpan<byte> inputSpan, Span<uint> limbs, Span<byte> raw)
+    {
+        int limbCount = 1;
+        limbs[0] = 0;
+
+        // A leading partial word of one to three bytes is below 2^24, so it is already a valid limb.
+        int head = inputSpan.Length & (sizeof(uint) - 1);
+        if (head != 0)
+        {
+            uint w = 0;
+            for (int i = 0; i < head; i++)
             {
-                carry += digits[i] << 8;
-                carry = Math.DivRem(carry, Base, out int remainder);
-                digits[i] = (byte)remainder;
+                w = (w << 8) | inputSpan[i];
             }
 
-            while (carry > 0)
+            limbs[0] = w;
+        }
+
+        for (int offset = head; offset < inputSpan.Length; offset += sizeof(uint))
+        {
+            // value = value * 2^32 + word. The carry stays below 2^32, so cur stays below
+            // 58^5 * 2^32 = 2.82e18 and never overflows a ulong.
+            ulong carry = BinaryPrimitives.ReadUInt32BigEndian(inputSpan.Slice(offset, sizeof(uint)));
+
+            for (int i = 0; i < limbCount; i++)
             {
-                carry = Math.DivRem(carry, Base, out int remainder);
-                digits[digitCount++] = (byte)remainder;
+                ulong cur = ((ulong)limbs[i] << 32) + carry;
+                ulong q = cur / Base58Pow5;
+                limbs[i] = (uint)(cur - (q * Base58Pow5));
+                carry = q;
+            }
+
+            // carry < 2^32 < 7 * 58^5, so at most two new limbs appear per word.
+            while (carry != 0)
+            {
+                ulong q = carry / Base58Pow5;
+                limbs[limbCount++] = (uint)(carry - (q * Base58Pow5));
+                carry = q;
             }
         }
 
-        return digitCount;
+        // The limb bound overshoots the true limb count by at most a limb or two. Leaving those
+        // limbs unwritten at the front costs nothing: they are exactly the leading zeros we skip.
+        int unusedDigits = (limbs.Length - limbCount) * Base58Pow5Digits;
+
+        for (int j = 0; j < limbCount; j++)
+        {
+            uint v = limbs[limbCount - 1 - j];
+            int at = unusedDigits + (Base58Pow5Digits * j);
+            raw[at + 4] = (byte)(v % 58U);
+            raw[at + 3] = (byte)(v / 58U % 58U);
+            raw[at + 2] = (byte)(v / 3364U % 58U);
+            raw[at + 1] = (byte)(v / 195112U % 58U);
+            raw[at + 0] = (byte)(v / 11316496U);
+        }
+
+        int rawLeadingZeros = unusedDigits;
+        while (rawLeadingZeros < raw.Length && raw[rawLeadingZeros] == 0)
+        {
+            rawLeadingZeros++;
+        }
+
+        return rawLeadingZeros;
     }
 
     [SkipLocalsInit]
