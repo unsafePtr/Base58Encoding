@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
@@ -205,6 +206,185 @@ internal static class VectorMath
         Unsafe.WriteUnaligned(ref Unsafe.Add(ref dst, at), (uint)packedLane);
         Unsafe.Add(ref dst, at + 4) = (byte)(packedLane >> 32);
     }
+
+    /// <summary>
+    /// Maps raw base-58 digits to Bitcoin-alphabet characters, writing one character per digit.
+    /// Firedancer's <c>raw_to_base58</c>.
+    /// </summary>
+    /// <remarks>
+    /// A 58-entry table does not fit <c>vpshufb</c>'s 16-byte window, so the obvious vector lookup
+    /// needs four shuffles blended by <c>digit &gt;&gt; 4</c>. This needs no table at all. The Bitcoin
+    /// alphabet is six runs of consecutive ASCII — '1'-'9', 'A'-'H', 'J'-'N', 'P'-'Z', 'a'-'k',
+    /// 'm'-'z' — so the character is the digit plus an offset that steps up at five known digits:
+    /// <c>c = d + 49 + 7*(d&gt;8) + (d&gt;16) + (d&gt;21) + 6*(d&gt;32) + (d&gt;43)</c>. Each comparison
+    /// yields an all-ones mask, so ANDing it with its weight contributes that weight or nothing.
+    /// Both forms were measured; the table lookup lost at the 44-digit length a 32-byte encode uses,
+    /// because building its four tables costs more than the lookup saves over that few digits.
+    /// Every digit is below 58, so the signed byte comparisons and the sbyte arithmetic — which peaks
+    /// at 'z' = 122 — stay well inside range.
+    /// </remarks>
+    internal static void MapBitcoinAlphabet<TChar>(ReadOnlySpan<byte> digits, Span<TChar> destination)
+        where TChar : unmanaged, IBinaryInteger<TChar>
+    {
+        Debug.Assert(destination.Length >= digits.Length, "destination must have room for every digit");
+
+        if (typeof(TChar) == typeof(byte))
+        {
+            MapToBytes(digits, MemoryMarshal.Cast<TChar, byte>(destination));
+            return;
+        }
+
+        if (typeof(TChar) == typeof(char))
+        {
+            MapToChars(digits, MemoryMarshal.Cast<TChar, ushort>(destination));
+            return;
+        }
+
+        ReadOnlySpan<byte> alphabet = Base58BitcoinTables.BitcoinChars;
+        for (int i = 0; i < digits.Length; i++)
+        {
+            destination[i] = TChar.CreateTruncating((ushort)alphabet[digits[i]]);
+        }
+    }
+
+    // The remainder is finished by one more full-width block ending at the last digit, overlapping
+    // whatever the loop already wrote. Mapping a digit is a pure function, so rewriting a character
+    // with the same character is harmless, and it beats both alternatives measurably: a 32-byte
+    // encode emits 44 digits, which a second 128-bit loop cannot help (the 12 left over are fewer
+    // than its 16), yet merely having that loop in the method cost 12% at that length. A scalar
+    // tail instead leaves 12 of 44 digits unvectorised. This finishes 44 digits in two stores.
+    private static void MapToBytes(ReadOnlySpan<byte> digits, Span<byte> destination)
+    {
+        ref byte src = ref MemoryMarshal.GetReference(digits);
+        ref byte dst = ref MemoryMarshal.GetReference(destination);
+        int len = digits.Length;
+
+        if (Vector256.IsHardwareAccelerated && len >= Vector256<byte>.Count)
+        {
+            int i = 0;
+            for (; i <= len - Vector256<byte>.Count; i += Vector256<byte>.Count)
+            {
+                MapDigits(Vector256.LoadUnsafe(ref src, (nuint)i).AsSByte()).AsByte().StoreUnsafe(ref dst, (nuint)i);
+            }
+
+            if (i < len)
+            {
+                i = len - Vector256<byte>.Count;
+                MapDigits(Vector256.LoadUnsafe(ref src, (nuint)i).AsSByte()).AsByte().StoreUnsafe(ref dst, (nuint)i);
+            }
+
+            return;
+        }
+
+        if (Vector128.IsHardwareAccelerated && len >= Vector128<byte>.Count)
+        {
+            int i = 0;
+            for (; i <= len - Vector128<byte>.Count; i += Vector128<byte>.Count)
+            {
+                MapDigits(Vector128.LoadUnsafe(ref src, (nuint)i).AsSByte()).AsByte().StoreUnsafe(ref dst, (nuint)i);
+            }
+
+            if (i < len)
+            {
+                i = len - Vector128<byte>.Count;
+                MapDigits(Vector128.LoadUnsafe(ref src, (nuint)i).AsSByte()).AsByte().StoreUnsafe(ref dst, (nuint)i);
+            }
+
+            return;
+        }
+
+        ReadOnlySpan<byte> alphabet = Base58BitcoinTables.BitcoinChars;
+        for (int i = 0; i < len; i++)
+        {
+            Unsafe.Add(ref dst, i) = alphabet[Unsafe.Add(ref src, i)];
+        }
+    }
+
+    // Same map and the same overlapping tail, UTF-16 destination: string.Create hands the encoder a
+    // Span<char>, so this is the form the common Encode(data) overload takes. Widening a mapped byte
+    // vector is two zero-extends.
+    private static void MapToChars(ReadOnlySpan<byte> digits, Span<ushort> destination)
+    {
+        ref byte src = ref MemoryMarshal.GetReference(digits);
+        ref ushort dst = ref MemoryMarshal.GetReference(destination);
+        int len = digits.Length;
+
+        if (Vector256.IsHardwareAccelerated && len >= Vector256<byte>.Count)
+        {
+            int i = 0;
+            for (; i <= len - Vector256<byte>.Count; i += Vector256<byte>.Count)
+            {
+                StoreWidened(MapDigits(Vector256.LoadUnsafe(ref src, (nuint)i).AsSByte()).AsByte(), ref dst, i);
+            }
+
+            if (i < len)
+            {
+                i = len - Vector256<byte>.Count;
+                StoreWidened(MapDigits(Vector256.LoadUnsafe(ref src, (nuint)i).AsSByte()).AsByte(), ref dst, i);
+            }
+
+            return;
+        }
+
+        if (Vector128.IsHardwareAccelerated && len >= Vector128<byte>.Count)
+        {
+            int i = 0;
+            for (; i <= len - Vector128<byte>.Count; i += Vector128<byte>.Count)
+            {
+                StoreWidened(MapDigits(Vector128.LoadUnsafe(ref src, (nuint)i).AsSByte()).AsByte(), ref dst, i);
+            }
+
+            if (i < len)
+            {
+                i = len - Vector128<byte>.Count;
+                StoreWidened(MapDigits(Vector128.LoadUnsafe(ref src, (nuint)i).AsSByte()).AsByte(), ref dst, i);
+            }
+
+            return;
+        }
+
+        ReadOnlySpan<byte> alphabet = Base58BitcoinTables.BitcoinChars;
+        for (int i = 0; i < len; i++)
+        {
+            Unsafe.Add(ref dst, i) = alphabet[Unsafe.Add(ref src, i)];
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void StoreWidened(Vector256<byte> mapped, ref ushort dst, int at)
+    {
+        (Vector256<ushort> lower, Vector256<ushort> upper) = Vector256.Widen(mapped);
+        lower.StoreUnsafe(ref dst, (nuint)at);
+        upper.StoreUnsafe(ref dst, (nuint)(at + Vector256<ushort>.Count));
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void StoreWidened(Vector128<byte> mapped, ref ushort dst, int at)
+    {
+        (Vector128<ushort> lower, Vector128<ushort> upper) = Vector128.Widen(mapped);
+        lower.StoreUnsafe(ref dst, (nuint)at);
+        upper.StoreUnsafe(ref dst, (nuint)(at + Vector128<ushort>.Count));
+    }
+
+    /// <inheritdoc cref="MapBitcoinAlphabet{TChar}(ReadOnlySpan{byte}, Span{TChar})"/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static Vector256<sbyte> MapDigits(Vector256<sbyte> d)
+        => d + Vector256.Create((sbyte)49)
+           + (Vector256.GreaterThan(d, Vector256.Create((sbyte)8)) & Vector256.Create((sbyte)7))
+           + (Vector256.GreaterThan(d, Vector256.Create((sbyte)16)) & Vector256.Create((sbyte)1))
+           + (Vector256.GreaterThan(d, Vector256.Create((sbyte)21)) & Vector256.Create((sbyte)1))
+           + (Vector256.GreaterThan(d, Vector256.Create((sbyte)32)) & Vector256.Create((sbyte)6))
+           + (Vector256.GreaterThan(d, Vector256.Create((sbyte)43)) & Vector256.Create((sbyte)1));
+
+    /// <inheritdoc cref="MapBitcoinAlphabet{TChar}(ReadOnlySpan{byte}, Span{TChar})"/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static Vector128<sbyte> MapDigits(Vector128<sbyte> d)
+        => d + Vector128.Create((sbyte)49)
+           + (Vector128.GreaterThan(d, Vector128.Create((sbyte)8)) & Vector128.Create((sbyte)7))
+           + (Vector128.GreaterThan(d, Vector128.Create((sbyte)16)) & Vector128.Create((sbyte)1))
+           + (Vector128.GreaterThan(d, Vector128.Create((sbyte)21)) & Vector128.Create((sbyte)1))
+           + (Vector128.GreaterThan(d, Vector128.Create((sbyte)32)) & Vector128.Create((sbyte)6))
+           + (Vector128.GreaterThan(d, Vector128.Create((sbyte)43)) & Vector128.Create((sbyte)1));
 
     // Vectorized dot product of two equal-length ulong spans: sum(x[i] * y[i]).
     // A focused, dependency-free stand-in for TensorPrimitives.Dot<ulong>, tuned for the small

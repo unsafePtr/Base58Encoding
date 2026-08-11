@@ -434,12 +434,21 @@ public sealed partial class Base58<TAlphabet>
                 destination[..LeadingCount].Fill(TChar.CreateTruncating(T.FirstCharacter));
             }
 
-            int index = LeadingCount;
-            int end = DigitStart + DigitCount;
-            ReadOnlySpan<byte> alphabet = T.Characters;
-            for (int i = DigitStart; i < end; i++)
+            ReadOnlySpan<byte> digits = Digits.Slice(DigitStart, DigitCount);
+            Span<TChar> target = destination.Slice(LeadingCount, DigitCount);
+
+            // The alphabet is a type parameter, so this comparison folds at JIT time and only the
+            // matching branch survives in each instantiation.
+            if (typeof(T) == typeof(BitcoinAlphabet))
             {
-                destination[index++] = TChar.CreateTruncating((ushort)alphabet[Digits[i]]);
+                VectorMath.MapBitcoinAlphabet(digits, target);
+                return;
+            }
+
+            ReadOnlySpan<byte> alphabet = T.Characters;
+            for (int i = 0; i < digits.Length; i++)
+            {
+                target[i] = TChar.CreateTruncating((ushort)alphabet[digits[i]]);
             }
         }
 
