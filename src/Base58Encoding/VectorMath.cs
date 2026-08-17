@@ -111,6 +111,12 @@ internal static class VectorMath
     {
         Debug.Assert(raw.Length == intermediate.Length * 5, "raw must hold exactly five digits per limb");
 
+        // The reciprocals are exact on [0, 58^5) only; the tightest breaks at 692,388,571. Callers
+        // satisfy that by construction, and MultiplyWidening32's < 2^32 check is too weak to catch it.
+        Debug.Assert(
+            !intermediate.ContainsAnyExceptInRange(0UL, Base58BitcoinTables.R1Div - 1UL),
+            "every limb must be below 58^5; the digit-extraction reciprocals are only exact on that domain");
+
         ref ulong src = ref MemoryMarshal.GetReference(intermediate);
         ref byte dst = ref MemoryMarshal.GetReference(raw);
         int len = intermediate.Length;
