@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 
 namespace Base58Encoding.Tests;
 
@@ -19,6 +20,9 @@ namespace Base58Encoding.Tests;
 //
 // Runs by default: these are the only tests covering the Vector128 and scalar paths. ChildMarker is
 // what stops the child spawning its own child.
+//
+// Both knobs are JIT-only: ILC bakes the instruction sets in when it compiles, so a native run
+// skips these and the aot-tests workflow covers the kernels with per-baseline publishes instead.
 public class VectorInstructionSetTests
 {
     private const string ChildMarker = "BASE58_VECTOR_CHILD";
@@ -36,6 +40,9 @@ public class VectorInstructionSetTests
     public void AllTests_Pass_WithVectorInstructionSetDisabled(string environmentVariable, string value)
     {
         Assert.SkipWhen(Environment.GetEnvironmentVariable(ChildMarker) == "1", "already the child run");
+        Assert.SkipUnless(
+            RuntimeFeature.IsDynamicCodeSupported,
+            "native AOT: instruction sets are baked in by ILC, so the env knob would do nothing");
 
 #if DEBUG
         const string configuration = "Debug";

@@ -428,3 +428,5 @@ FodyWeavers.xsd
 *.msp
 
 nul
+# Native AOT publish output from a local aot-tests.yml dry run
+aot-out/
