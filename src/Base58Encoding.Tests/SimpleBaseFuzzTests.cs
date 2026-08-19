@@ -12,8 +12,9 @@ namespace Base58Encoding.Tests;
 //
 // Ground truth is a BigInteger oracle (the literal definition of Base58), so the fuzz validates our
 // code without trusting any third party. We also cross-check our encoder against SimpleBase's, but
-// not SimpleBase.Decode(ours): its 5.6.2 decoder drops the most-significant byte on some lengths
-// (ssg/SimpleBase#83, fixed in 5.6.3 — which we cannot take yet, see Directory.Packages.props).
+// not SimpleBase.Decode(ours): their decoder dropped the most-significant byte on some lengths
+// (ssg/SimpleBase#83), which ruled that direction out while we were pinned below the fix. We are
+// on 5.6.4 now and that bug is fixed, so the reverse cross-check could be enabled.
 public class SimpleBaseFuzzTests
 {
     private const string Alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
