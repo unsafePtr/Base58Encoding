@@ -1,26 +1,12 @@
 name: Build and Publish to NuGet
 
+# Release-only: tags and manual dispatch. Ordinary pushes and PRs are covered by tests.yml and
+# aot-tests.yml, which build the same solution across more platforms -- this one used to duplicate
+# that on every library change while never packing, since Pack is gated on a version being set.
 on:
   push:
     tags:
       - 'v*.*.*'
-    branches: [ master, main ]
-    paths:
-      - 'src/Base58Encoding/**'
-      - 'src/Directory.Build.props'
-      - 'src/Directory.Packages.props'
-      - 'src/NuGet.Config'
-      - 'src/PACKAGE.md'
-      - 'global.json'
-  pull_request:
-    branches: [ master, main ]
-    paths:
-      - 'src/Base58Encoding/**'
-      - 'src/Directory.Build.props'
-      - 'src/Directory.Packages.props'
-      - 'src/NuGet.Config'
-      - 'src/PACKAGE.md'
-      - 'global.json'
   workflow_dispatch:
     inputs:
       version:
@@ -59,7 +45,12 @@ jobs:
     - name: Build
       run: dotnet build src/Base58Encoding.slnx --configuration Release --no-restore
       
+    # The release path's own gate. tests.yml never runs on a tag -- a branches: filter does not
+    # match refs/tags/* -- so for a tag cut anywhere other than an already-tested master commit,
+    # nothing else has run the suite against this ref. Skipped only for a dispatch with no version,
+    # which builds without packing.
     - name: Test
+      if: env.VERSION != ''
       run: dotnet test --project src/Base58Encoding.Tests/Base58Encoding.Tests.csproj --configuration Release --no-build --verbosity normal
       
     - name: Pack

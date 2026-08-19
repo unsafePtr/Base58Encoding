@@ -55,6 +55,12 @@ Returns a typical upper bound for the decoded byte count from an encoded input o
 Formula: `encodedLength * 733 / 1000 + 1`. Suitable for inputs without leading `1` characters.
 For inputs that may contain leading `1`s, size the destination at `encodedLength` (safe upper bound).
 
+## Native AOT
+
+Reflection-free and marked `IsAotCompatible`, so `PublishAot` and `PublishTrimmed` need no configuration.
+
+Note that `Vector256` is not used under Native AOT: ILC fixes `Vector256.IsHardwareAccelerated` at build time against a baseline without AVX2, so AOT builds run the `Vector128` kernel.
+
 ## Usage
 
 ### Allocating API

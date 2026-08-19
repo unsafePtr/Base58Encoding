@@ -1,0 +1,57 @@
+name: Tests
+
+# The ordinary JIT test run, on every push and PR, with no path filter.
+#
+# aot-tests.yml covers the native legs and publish-nuget.yml runs the suite once more before it
+# packs, but that one is filtered to src/Base58Encoding/** and runs on arm64 only -- so without this
+# workflow a test-only change ran no JIT tests at all, and every x64 execution in CI came from an
+# ILC-compiled binary.
+#
+# The x64 legs are not redundant with the native ones. VectorInstructionSetTests drives its coverage
+# through DOTNET_EnableAVX2 and DOTNET_EnableHWIntrinsic, knobs ILC bakes past and an arm64 runner
+# ignores, so these are the only jobs where the Vector128 and scalar fallbacks actually execute.
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: ${{ matrix.rid }}
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { runner: ubuntu-24.04,     rid: linux-x64 }
+          - { runner: ubuntu-24.04-arm, rid: linux-arm64 }
+          - { runner: windows-2025,     rid: win-x64 }
+          - { runner: macos-26,         rid: osx-arm64 }
+
+    steps:
+    - uses: actions/checkout@v7
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v5
+      with:
+        dotnet-version: 10.0.x
+
+    # The whole solution, so a break in the benchmarks project surfaces here too: nothing else builds
+    # it, since publish-nuget.yml's path filter does not cover it either.
+    - name: Restore
+      run: dotnet restore src/Base58Encoding.slnx
+
+    - name: Build
+      run: dotnet build src/Base58Encoding.slnx --configuration Release --no-restore
+
+    # dotnet run rather than dotnet test: this is how the project drives xunit v3's own CLI, and it
+    # is what the child processes in VectorInstructionSetTests re-invoke. Those children add a few
+    # minutes -- they each re-run the whole suite with an instruction set disabled.
+    - name: Test
+      run: dotnet run --project src/Base58Encoding.Tests/Base58Encoding.Tests.csproj --configuration Release --no-build

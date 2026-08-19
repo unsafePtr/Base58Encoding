@@ -9,6 +9,13 @@ A .NET 10.0 Base58 encoding and decoding library with support for multiple alpha
 - **Type Safe**: Leverages ReadOnlySpan and ReadOnlyMemory for safe memory operations
 - **Intrinsics**: Uses SIMD `Vector256` and unrolled loop for counting leading zeros
 - **Optimized Hot Paths**: Fast fixed-length encode/decode for 32-byte and 64-byte inputs using Firedancer-like optimizations
+- **Native AOT**: reflection-free and trim-clean; the suite itself runs as an AOT binary in CI
+
+## Native AOT
+
+The library is reflection-free and marked `IsAotCompatible`, so `PublishAot` and `PublishTrimmed` need no configuration and produce no warnings.
+
+Note that `Vector256` is not used under Native AOT: ILC resolves `Vector256.IsHardwareAccelerated` at build time against a baseline that excludes AVX2, so AOT builds run the `Vector128` kernel. Setting `<IlcInstructionSet>x86-64-v3</IlcInstructionSet>` restores it, at the cost of making AVX2 a hard startup requirement.
 
 ## Usage
 

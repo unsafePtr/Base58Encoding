@@ -1,0 +1,96 @@
+name: Native AOT tests
+
+# Publishes the test suite with PublishAot and runs the native binary on x64 and arm64.
+#
+# Not a duplicate of the JIT run: ILC resolves Vector256/Vector128.IsHardwareAccelerated at build
+# time against an instruction-set baseline instead of against the live CPU, so the same source can
+# compile to a different kernel. The x86-64-v3 legs guarantee AVX2; the default ones do not.
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+  workflow_dispatch:
+
+jobs:
+  aot:
+    name: ${{ matrix.rid }}${{ matrix.instruction-set && format(' ({0})', matrix.instruction-set) || '' }}
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { runner: ubuntu-24.04,     rid: linux-x64,   instruction-set: '' }
+          - { runner: ubuntu-24.04,     rid: linux-x64,   instruction-set: x86-64-v3 }
+          - { runner: ubuntu-24.04-arm, rid: linux-arm64, instruction-set: '' }
+          - { runner: macos-26,         rid: osx-arm64,   instruction-set: '' }
+          - { runner: windows-2025,     rid: win-x64,     instruction-set: x86-64-v3 }
+
+    steps:
+    - uses: actions/checkout@v7
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v5
+      with:
+        dotnet-version: 10.0.x
+
+    # ILC links through clang and needs zlib's headers.
+    - name: Install native toolchain (Linux)
+      if: runner.os == 'Linux'
+      run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
+
+    # An empty IlcInstructionSet is a no-op, so the default-baseline legs need no special case.
+    - name: Publish (Native AOT)
+      shell: bash
+      run: |
+        dotnet publish src/Base58Encoding.Tests/Base58Encoding.Tests.csproj \
+          --configuration Release --runtime ${{ matrix.rid }} --output aot-out \
+          -p:PublishAot=true -p:IlcInstructionSet=${{ matrix.instruction-set }} 2>&1 | tee publish.log
+
+    # Scoped to Base58Encoding so an unrelated xunit or SimpleBase warning cannot fail CI. Warning
+    # lines end with the driving project path, which contains the name too, so strip it first.
+    - name: Assert no AOT/trim warnings from the library
+      shell: bash
+      run: |
+        ours=$(grep -E 'warning IL[0-9]+' publish.log | sed -E 's/ \[[^][]*\]$//' | grep 'Base58Encoding' || true)
+        if [ -n "$ours" ]; then
+          echo "::error::Base58Encoding produced trim/AOT warnings:"
+          echo "$ours"
+          exit 1
+        fi
+
+    # No `dotnet` in front: a standalone binary. bash resolves the .exe suffix on Windows.
+    - name: Run the suite natively
+      shell: bash
+      run: |
+        chmod +x aot-out/Base58Encoding.Tests*
+        ./aot-out/Base58Encoding.Tests | tee native.log
+
+    # The xunit package is swapped on PublishAot, so the native legs discover tests with a source
+    # generator while every other run uses reflection. Source-generated discovery is a strict subset:
+    # a test it cannot see (generic test methods, interface-based attributes) is silently absent
+    # rather than an error, so without this both legs would go green while the native one tested
+    # less. Runtime-skipped tests still count toward Total -- VectorInstructionSetTests skips itself
+    # here -- so a mismatch means genuinely undiscovered tests. One leg is enough: discovery does not
+    # vary by RID or instruction set. The counts are read from the last summary line: a failing
+    # VectorInstructionSetTests dumps its child's console output, which carries one too.
+    - name: Discovery parity with the JIT package
+      if: matrix.rid == 'linux-x64' && matrix.instruction-set == ''
+      shell: bash
+      run: |
+        dotnet run --project src/Base58Encoding.Tests/Base58Encoding.Tests.csproj --configuration Release | tee jit.log
+        native=$(grep -oP 'Total: \K[0-9]+' native.log | tail -1)
+        jit=$(grep -oP 'Total: \K[0-9]+' jit.log | tail -1)
+        echo "native discovered $native, JIT discovered $jit"
+        if [ -z "$native" ] || [ -z "$jit" ]; then
+          echo "::error::could not parse a test count from one of the runs"
+          exit 1
+        fi
+        if [ "$native" != "$jit" ]; then
+          echo "::error::source-generated discovery found $native tests, reflection found $jit"
+          exit 1
+        fi
