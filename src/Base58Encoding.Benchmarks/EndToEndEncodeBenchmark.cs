@@ -32,7 +32,6 @@ public class EndToEndEncodeBenchmark
 
     private byte[] _data = default!;
     private uint[][] _jagged = default!;
-    private ulong[] _rowMajor = default!;
 
     [GlobalSetup]
     public void Setup()
@@ -47,14 +46,14 @@ public class EndToEndEncodeBenchmark
         int binarySz = Size == 32 ? Base58BitcoinTables.BinarySz32 : Base58BitcoinTables.BinarySz64;
         int rowLen = (Size == 32 ? Base58BitcoinTables.IntermediateSz32 : Base58BitcoinTables.IntermediateSz64) - 1;
 
-        _rowMajor = (Size == 32 ? Base58BitcoinTables.EncodeTable32RowMajor : Base58BitcoinTables.EncodeTable64RowMajor).ToArray();
+        ReadOnlySpan<ulong> rowMajor = RowMajor(Size);
         _jagged = new uint[binarySz][];
         for (int i = 0; i < binarySz; i++)
         {
             _jagged[i] = new uint[rowLen];
             for (int j = 0; j < rowLen; j++)
             {
-                _jagged[i][j] = (uint)_rowMajor[i * rowLen + j];
+                _jagged[i][j] = (uint)rowMajor[i * rowLen + j];
             }
         }
 
@@ -184,14 +183,14 @@ public class EndToEndEncodeBenchmark
             return;
         }
 
-        ulong[] rowMajor = _rowMajor;
+        ReadOnlySpan<ulong> rowMajor = RowMajor(Size);
         Span<ulong> target = intermediate.Slice(1, rowLen);
 
         if (typeof(TMode) == typeof(TensorMode))
         {
             for (int i = startRow; i < endRow; i++)
             {
-                ReadOnlySpan<ulong> row = rowMajor.AsSpan(i * rowLen, rowLen);
+                ReadOnlySpan<ulong> row = rowMajor.Slice(i * rowLen, rowLen);
                 // destination[k] = (row[k] * binary[i]) + target[k]; addend and destination are the
                 // same span (allowed: they begin at the same location).
                 TensorPrimitives.MultiplyAdd(row, (ulong)binary[i], target, target);
@@ -203,10 +202,13 @@ public class EndToEndEncodeBenchmark
         // SimdMode
         for (int i = startRow; i < endRow; i++)
         {
-            ReadOnlySpan<ulong> row = rowMajor.AsSpan(i * rowLen, rowLen);
+            ReadOnlySpan<ulong> row = rowMajor.Slice(i * rowLen, rowLen);
             MultiplyAddSimd(row, binary[i], target);
         }
     }
+
+    private static ReadOnlySpan<ulong> RowMajor(int size) =>
+        size == 32 ? Base58BitcoinTables.EncodeTable32RowMajor : Base58BitcoinTables.EncodeTable64RowMajor;
 
     // acc[k] += x[k] * scale, widest available width first, then a scalar tail / fallback.
     private static void MultiplyAddSimd(ReadOnlySpan<ulong> x, ulong scale, Span<ulong> acc)

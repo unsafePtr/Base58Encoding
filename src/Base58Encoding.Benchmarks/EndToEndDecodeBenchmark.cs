@@ -18,7 +18,6 @@ namespace Base58Encoding.Benchmarks;
 public class EndToEndDecodeBenchmark
 {
     private string _sig64 = default!;
-    private ulong[] _transposed64 = default!;
     private uint[][] _jagged64 = default!;
 
     [GlobalSetup]
@@ -28,10 +27,9 @@ public class EndToEndDecodeBenchmark
         Random.Shared.NextBytes(bytes);
         _sig64 = Base58.Bitcoin.Encode(bytes);
 
-        // Production tables on this branch are transposed column-major ulong.
-        _transposed64 = Base58BitcoinTables.DecodeTable64.ToArray();
-
+        // The production table is transposed column-major ulong.
         // Rebuild the original jagged row-major layout: jagged[i][j] = transposed[j*IntermediateSz64 + i].
+        ReadOnlySpan<ulong> transposed = Base58BitcoinTables.DecodeTable64;
         int rows = Base58BitcoinTables.IntermediateSz64;
         int cols = Base58BitcoinTables.BinarySz64;
         _jagged64 = new uint[rows][];
@@ -40,7 +38,7 @@ public class EndToEndDecodeBenchmark
             _jagged64[i] = new uint[cols];
             for (int j = 0; j < cols; j++)
             {
-                _jagged64[i][j] = (uint)_transposed64[j * rows + i];
+                _jagged64[i][j] = (uint)transposed[j * rows + i];
             }
         }
 
@@ -110,11 +108,11 @@ public class EndToEndDecodeBenchmark
         Span<ulong> binary = stackalloc ulong[Base58BitcoinTables.BinarySz64];
         if (useSimd)
         {
-            var table = _transposed64;
+            ReadOnlySpan<ulong> table = Base58BitcoinTables.DecodeTable64;
             int rows = Base58BitcoinTables.IntermediateSz64;
             for (int j = 0; j < Base58BitcoinTables.BinarySz64; j++)
             {
-                binary[j] = TensorDot(intermediate, table.AsSpan(j * rows, rows));
+                binary[j] = TensorDot(intermediate, table.Slice(j * rows, rows));
             }
         }
         else

@@ -147,24 +147,23 @@ public class VectorMathTests
     public void MultiplyWidening32Precondition_HoldsForAllProductionOperands()
     {
         // Table side.
-        foreach ((string name, ulong[] table) in new (string, ulong[])[]
-        {
-            (nameof(Base58BitcoinTables.EncodeTable32RowMajor), Base58BitcoinTables.EncodeTable32RowMajor.ToArray()),
-            (nameof(Base58BitcoinTables.EncodeTable64RowMajor), Base58BitcoinTables.EncodeTable64RowMajor.ToArray()),
-            (nameof(Base58BitcoinTables.DecodeTable32), Base58BitcoinTables.DecodeTable32.ToArray()),
-            (nameof(Base58BitcoinTables.DecodeTable64), Base58BitcoinTables.DecodeTable64.ToArray()),
-        })
-        {
-            for (int i = 0; i < table.Length; i++)
-            {
-                Assert.True(table[i] < (ulong)OperandLimit,
-                    $"{name}[{i}] = {table[i]} exceeds 2^32; MultiplyWidening32 would truncate it.");
-            }
-        }
+        AssertOperandsFit(nameof(Base58BitcoinTables.EncodeTable32RowMajor), Base58BitcoinTables.EncodeTable32RowMajor);
+        AssertOperandsFit(nameof(Base58BitcoinTables.EncodeTable64RowMajor), Base58BitcoinTables.EncodeTable64RowMajor);
+        AssertOperandsFit(nameof(Base58BitcoinTables.DecodeTable32), Base58BitcoinTables.DecodeTable32);
+        AssertOperandsFit(nameof(Base58BitcoinTables.DecodeTable64), Base58BitcoinTables.DecodeTable64);
 
         // Limb side: an intermediate limb is at most 58^5 - 1, which is below 2^32.
         ulong maxLimb = (57UL * 11316496UL) + (57UL * 195112UL) + (57UL * 3364UL) + (57UL * 58UL) + 57UL;
         Assert.Equal(Base58BitcoinTables.R1Div - 1UL, maxLimb);
         Assert.True(maxLimb < (ulong)OperandLimit);
+    }
+
+    private static void AssertOperandsFit(string name, ReadOnlySpan<ulong> table)
+    {
+        for (int i = 0; i < table.Length; i++)
+        {
+            Assert.True(table[i] < (ulong)OperandLimit,
+                $"{name}[{i}] = {table[i]} exceeds 2^32; MultiplyWidening32 would truncate it.");
+        }
     }
 }
