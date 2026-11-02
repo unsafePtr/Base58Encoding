@@ -23,10 +23,10 @@ public class Base58EncodeFast
         Assert.Equal(9, Base58BitcoinTables.IntermediateSz32);
         Assert.Equal(45, Base58BitcoinTables.Raw58Sz32);
 
-        // Verify table bounds
-        var encodeTable = Base58BitcoinTables.EncodeTable32;
-        Assert.Equal(8, encodeTable.Length); // Should be BinarySz32
-        Assert.Equal(8, encodeTable[0].Length); // Should be IntermediateSz32 - 1
+        // Encode has a row of IntermediateSz32 - 1 coefficients per source limb.
+        // Decode has IntermediateSz32 coefficients per output limb.
+        Assert.Equal(8 * 8, Base58BitcoinTables.EncodeTable32RowMajor.Length);
+        Assert.Equal(8 * 9, Base58BitcoinTables.DecodeTable32.Length);
     }
 
     [Fact]
@@ -155,10 +155,10 @@ public class Base58EncodeFast
         Assert.Equal(18, Base58BitcoinTables.IntermediateSz64);
         Assert.Equal(90, Base58BitcoinTables.Raw58Sz64);
 
-        // Verify table bounds
-        var encodeTable = Base58BitcoinTables.EncodeTable64;
-        Assert.Equal(16, encodeTable.Length); // Should be BinarySz64
-        Assert.Equal(17, encodeTable[0].Length); // Should be IntermediateSz64 - 1
+        // Encode has a row of IntermediateSz64 - 1 coefficients per source limb.
+        // Decode has IntermediateSz64 coefficients per output limb.
+        Assert.Equal(16 * 17, Base58BitcoinTables.EncodeTable64RowMajor.Length);
+        Assert.Equal(16 * 18, Base58BitcoinTables.DecodeTable64.Length);
     }
 
     [Fact]

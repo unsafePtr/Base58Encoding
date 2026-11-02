@@ -265,7 +265,7 @@ public sealed partial class Base58<TAlphabet>
         Span<ulong> acc = intermediate.Slice(1, rowLen);
         for (int i = 0; i < Base58BitcoinTables.BinarySz32; i++)
         {
-            VectorMath.TensorMultiplyAdd(Base58BitcoinTables.EncodeTable32RowMajor.AsSpan(i * rowLen, rowLen), binary[i], acc);
+            VectorMath.TensorMultiplyAdd(Base58BitcoinTables.EncodeTable32RowMajor.Slice(i * rowLen, rowLen), binary[i], acc);
         }
 
         // Reduce each term to be less than 58^5
@@ -378,7 +378,7 @@ public sealed partial class Base58<TAlphabet>
         Span<ulong> acc = intermediate.Slice(1, rowLen);
         for (int i = 0; i < 8; i++)
         {
-            VectorMath.TensorMultiplyAdd(Base58BitcoinTables.EncodeTable64RowMajor.AsSpan(i * rowLen, rowLen), binary[i], acc);
+            VectorMath.TensorMultiplyAdd(Base58BitcoinTables.EncodeTable64RowMajor.Slice(i * rowLen, rowLen), binary[i], acc);
         }
 
         // Mini-reduction to prevent overflow (like Firedancer)
@@ -387,7 +387,7 @@ public sealed partial class Base58<TAlphabet>
 
         for (int i = 8; i < Base58BitcoinTables.BinarySz64; i++)
         {
-            VectorMath.TensorMultiplyAdd(Base58BitcoinTables.EncodeTable64RowMajor.AsSpan(i * rowLen, rowLen), binary[i], acc);
+            VectorMath.TensorMultiplyAdd(Base58BitcoinTables.EncodeTable64RowMajor.Slice(i * rowLen, rowLen), binary[i], acc);
         }
 
         // Reduce each term to be less than 58^5

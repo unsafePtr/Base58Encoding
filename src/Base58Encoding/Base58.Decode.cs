@@ -297,7 +297,7 @@ public sealed partial class Base58<TAlphabet>
 
         for (int j = 0; j < Base58BitcoinTables.BinarySz32; j++)
         {
-            binary[j] = VectorMath.TensorDot(intermediate, Base58BitcoinTables.DecodeTable32.AsSpan(j * Base58BitcoinTables.IntermediateSz32, Base58BitcoinTables.IntermediateSz32));
+            binary[j] = VectorMath.TensorDot(intermediate, Base58BitcoinTables.DecodeTable32.Slice(j * Base58BitcoinTables.IntermediateSz32, Base58BitcoinTables.IntermediateSz32));
         }
 
         // Reduce each term to less than 2^32
@@ -396,7 +396,7 @@ public sealed partial class Base58<TAlphabet>
 
         for (int j = 0; j < Base58BitcoinTables.BinarySz64; j++)
         {
-            binary[j] = VectorMath.TensorDot(intermediate, Base58BitcoinTables.DecodeTable64.AsSpan(j * Base58BitcoinTables.IntermediateSz64, Base58BitcoinTables.IntermediateSz64));
+            binary[j] = VectorMath.TensorDot(intermediate, Base58BitcoinTables.DecodeTable64.Slice(j * Base58BitcoinTables.IntermediateSz64, Base58BitcoinTables.IntermediateSz64));
         }
 
         // Reduce each term to less than 2^32
