@@ -1,7 +1,7 @@
-using System;
-
 namespace Base58Encoding;
 
+// The Firedancer tables are ReadOnlySpan<ulong> properties over constant data in the assembly, not arrays.
+// Nothing can modify them, no static constructor builds them, and verification tools can read them from the compiled code.
 internal static class Base58BitcoinTables
 {
     internal const uint R1Div = 656356768U; // 58^5
@@ -16,29 +16,23 @@ internal static class Base58BitcoinTables
     internal const int IntermediateSz32 = 9;
     internal const int Raw58Sz32 = IntermediateSz32 * 5; // 45
 
-    // Contains the unique values less than 58^5 such that:
-    // 2^(32*(7-j)) = sum_k EncodeTable32[j][k]*58^(5*(7-k))
-    internal static readonly uint[][] EncodeTable32 =
+    // Row j holds the unique values below 58^5 such that 2^(32*(7-j)) = sum_k row[k]*58^(5*(7-k)).
+    // Rows are contiguous because TensorMultiplyAdd vector-loads a whole source-limb row.
+    internal static ReadOnlySpan<ulong> EncodeTable32RowMajor =>
     [
-        [513735U, 77223048U, 437087610U, 300156666U, 605448490U, 214625350U, 141436834U, 379377856U],
-        [0U, 78508U, 646269101U, 118408823U, 91512303U, 209184527U, 413102373U, 153715680U],
-        [0U, 0U, 11997U, 486083817U, 3737691U, 294005210U, 247894721U, 289024608U],
-        [0U, 0U, 0U, 1833U, 324463681U, 385795061U, 551597588U, 21339008U],
-        [0U, 0U, 0U, 0U, 280U, 127692781U, 389432875U, 357132832U],
-        [0U, 0U, 0U, 0U, 0U, 42U, 537767569U, 410450016U],
-        [0U, 0U, 0U, 0U, 0U, 0U, 6U, 356826688U],
-        [0U, 0U, 0U, 0U, 0U, 0U, 0U, 1U]
+        513735U, 77223048U, 437087610U, 300156666U, 605448490U, 214625350U, 141436834U, 379377856U,
+        0U, 78508U, 646269101U, 118408823U, 91512303U, 209184527U, 413102373U, 153715680U,
+        0U, 0U, 11997U, 486083817U, 3737691U, 294005210U, 247894721U, 289024608U,
+        0U, 0U, 0U, 1833U, 324463681U, 385795061U, 551597588U, 21339008U,
+        0U, 0U, 0U, 0U, 280U, 127692781U, 389432875U, 357132832U,
+        0U, 0U, 0U, 0U, 0U, 42U, 537767569U, 410450016U,
+        0U, 0U, 0U, 0U, 0U, 0U, 6U, 356826688U,
+        0U, 0U, 0U, 0U, 0U, 0U, 0U, 1U,
     ];
 
-    // EncodeTable32 flattened to a contiguous row-major ulong[]: TensorMultiplyAdd vector-loads a
-    // whole source-limb row at once, so rows must be contiguous, and ulong matches the accumulator /
-    // vector element type (no per-element widening). Same values as the jagged table, via Flatten.
-    internal static readonly ulong[] EncodeTable32RowMajor = Flatten(EncodeTable32, IntermediateSz32 - 1);
-
-    // Decode coefficients stored column-major (transposed): DecodeTable32[j * IntermediateSz32 + i]
-    // holds the coefficient for output limb j, intermediate limb i. Each output limb's column of
-    // IntermediateSz32 coefficients is contiguous, so it can be fed straight into TensorDot.
-    internal static readonly ulong[] DecodeTable32 =
+    // Element j * IntermediateSz32 + i is the coefficient of intermediate limb i in output limb j.
+    // Each output limb's coefficients are contiguous, so they feed straight into TensorDot.
+    internal static ReadOnlySpan<ulong> DecodeTable32 =>
     [
         1277U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U,
         2650397687U, 8360U, 0U, 0U, 0U, 0U, 0U, 0U, 0U,
@@ -55,37 +49,31 @@ internal static class Base58BitcoinTables
     internal const int IntermediateSz64 = 18;
     internal const int Raw58Sz64 = IntermediateSz64 * 5; // 90
 
-    // Contains the unique values less than 58^5 such that:
-    // 2^(32*(15-j)) = sum_k EncodeTable64[j][k]*58^(5*(17-k))
-    internal static readonly uint[][] EncodeTable64 =
+    // Row j holds the unique values below 58^5 such that 2^(32*(15-j)) = sum_k row[k]*58^(5*(17-k)).
+    // Rows are contiguous because TensorMultiplyAdd vector-loads a whole source-limb row.
+    internal static ReadOnlySpan<ulong> EncodeTable64RowMajor =>
     [
-        [2631U, 149457141U, 577092685U, 632289089U, 81912456U, 221591423U, 502967496U, 403284731U, 377738089U, 492128779U, 746799U, 366351977U, 190199623U, 38066284U, 526403762U, 650603058U, 454901440U],
-        [0U, 402U, 68350375U, 30641941U, 266024478U, 208884256U, 571208415U, 337765723U, 215140626U, 129419325U, 480359048U, 398051646U, 635841659U, 214020719U, 136986618U, 626219915U, 49699360U],
-        [0U, 0U, 61U, 295059608U, 141201404U, 517024870U, 239296485U, 527697587U, 212906911U, 453637228U, 467589845U, 144614682U, 45134568U, 184514320U, 644355351U, 104784612U, 308625792U],
-        [0U, 0U, 0U, 9U, 256449755U, 500124311U, 479690581U, 372802935U, 413254725U, 487877412U, 520263169U, 176791855U, 78190744U, 291820402U, 74998585U, 496097732U, 59100544U],
-        [0U, 0U, 0U, 0U, 1U, 285573662U, 455976778U, 379818553U, 100001224U, 448949512U, 109507367U, 117185012U, 347328982U, 522665809U, 36908802U, 577276849U, 64504928U],
-        [0U, 0U, 0U, 0U, 0U, 0U, 143945778U, 651677945U, 281429047U, 535878743U, 264290972U, 526964023U, 199595821U, 597442702U, 499113091U, 424550935U, 458949280U],
-        [0U, 0U, 0U, 0U, 0U, 0U, 0U, 21997789U, 294590275U, 148640294U, 595017589U, 210481832U, 404203788U, 574729546U, 160126051U, 430102516U, 44963712U],
-        [0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 3361701U, 325788598U, 30977630U, 513969330U, 194569730U, 164019635U, 136596846U, 626087230U, 503769920U],
-        [0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 513735U, 77223048U, 437087610U, 300156666U, 605448490U, 214625350U, 141436834U, 379377856U],
-        [0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 78508U, 646269101U, 118408823U, 91512303U, 209184527U, 413102373U, 153715680U],
-        [0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 11997U, 486083817U, 3737691U, 294005210U, 247894721U, 289024608U],
-        [0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 1833U, 324463681U, 385795061U, 551597588U, 21339008U],
-        [0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 280U, 127692781U, 389432875U, 357132832U],
-        [0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 42U, 537767569U, 410450016U],
-        [0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 6U, 356826688U],
-        [0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 1U]
+        2631U, 149457141U, 577092685U, 632289089U, 81912456U, 221591423U, 502967496U, 403284731U, 377738089U, 492128779U, 746799U, 366351977U, 190199623U, 38066284U, 526403762U, 650603058U, 454901440U,
+        0U, 402U, 68350375U, 30641941U, 266024478U, 208884256U, 571208415U, 337765723U, 215140626U, 129419325U, 480359048U, 398051646U, 635841659U, 214020719U, 136986618U, 626219915U, 49699360U,
+        0U, 0U, 61U, 295059608U, 141201404U, 517024870U, 239296485U, 527697587U, 212906911U, 453637228U, 467589845U, 144614682U, 45134568U, 184514320U, 644355351U, 104784612U, 308625792U,
+        0U, 0U, 0U, 9U, 256449755U, 500124311U, 479690581U, 372802935U, 413254725U, 487877412U, 520263169U, 176791855U, 78190744U, 291820402U, 74998585U, 496097732U, 59100544U,
+        0U, 0U, 0U, 0U, 1U, 285573662U, 455976778U, 379818553U, 100001224U, 448949512U, 109507367U, 117185012U, 347328982U, 522665809U, 36908802U, 577276849U, 64504928U,
+        0U, 0U, 0U, 0U, 0U, 0U, 143945778U, 651677945U, 281429047U, 535878743U, 264290972U, 526964023U, 199595821U, 597442702U, 499113091U, 424550935U, 458949280U,
+        0U, 0U, 0U, 0U, 0U, 0U, 0U, 21997789U, 294590275U, 148640294U, 595017589U, 210481832U, 404203788U, 574729546U, 160126051U, 430102516U, 44963712U,
+        0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 3361701U, 325788598U, 30977630U, 513969330U, 194569730U, 164019635U, 136596846U, 626087230U, 503769920U,
+        0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 513735U, 77223048U, 437087610U, 300156666U, 605448490U, 214625350U, 141436834U, 379377856U,
+        0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 78508U, 646269101U, 118408823U, 91512303U, 209184527U, 413102373U, 153715680U,
+        0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 11997U, 486083817U, 3737691U, 294005210U, 247894721U, 289024608U,
+        0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 1833U, 324463681U, 385795061U, 551597588U, 21339008U,
+        0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 280U, 127692781U, 389432875U, 357132832U,
+        0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 42U, 537767569U, 410450016U,
+        0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 6U, 356826688U,
+        0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 1U,
     ];
 
-    // EncodeTable64 flattened to a contiguous row-major ulong[]: TensorMultiplyAdd vector-loads a
-    // whole source-limb row at once, so rows must be contiguous, and ulong matches the accumulator /
-    // vector element type (no per-element widening). Same values as the jagged table, via Flatten.
-    internal static readonly ulong[] EncodeTable64RowMajor = Flatten(EncodeTable64, IntermediateSz64 - 1);
-
-    // Decode coefficients stored column-major (transposed): DecodeTable64[j * IntermediateSz64 + i]
-    // holds the coefficient for output limb j, intermediate limb i. Each output limb's column of
-    // IntermediateSz64 coefficients is contiguous, so it can be fed straight into TensorDot.
-    internal static readonly ulong[] DecodeTable64 =
+    // Element j * IntermediateSz64 + i is the coefficient of intermediate limb i in output limb j.
+    // Each output limb's coefficients are contiguous, so they feed straight into TensorDot.
+    internal static ReadOnlySpan<ulong> DecodeTable64 =>
     [
         249448U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U,
         3719864065U, 1632305U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U,
@@ -104,18 +92,4 @@ internal static class Base58BitcoinTables
         0U, 0U, 0U, 0U, 0U, 268435456U, 176160768U, 2485387264U, 1468637184U, 2959155456U, 1199103528U, 485140318U, 1483338760U, 2595180627U, 1933902296U, 100304420U, 0U, 0U,
         0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 1073741824U, 4194304000U, 17825792U, 4063920128U, 3355157504U, 656356768U, 1U,
     ];
-
-    private static ulong[] Flatten(uint[][] rows, int rowLength)
-    {
-        var flat = new ulong[rows.Length * rowLength];
-        for (int i = 0; i < rows.Length; i++)
-        {
-            for (int j = 0; j < rowLength; j++)
-            {
-                flat[i * rowLength + j] = rows[i][j];
-            }
-        }
-
-        return flat;
-    }
 }

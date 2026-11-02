@@ -29,7 +29,7 @@ public class EndToEndDecodeBenchmark
         _sig64 = Base58.Bitcoin.Encode(bytes);
 
         // Production tables on this branch are transposed column-major ulong.
-        _transposed64 = Base58BitcoinTables.DecodeTable64;
+        _transposed64 = Base58BitcoinTables.DecodeTable64.ToArray();
 
         // Rebuild the original jagged row-major layout: jagged[i][j] = transposed[j*IntermediateSz64 + i].
         int rows = Base58BitcoinTables.IntermediateSz64;

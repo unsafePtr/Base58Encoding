@@ -149,10 +149,10 @@ public class VectorMathTests
         // Table side.
         foreach ((string name, ulong[] table) in new (string, ulong[])[]
         {
-            (nameof(Base58BitcoinTables.EncodeTable32RowMajor), Base58BitcoinTables.EncodeTable32RowMajor),
-            (nameof(Base58BitcoinTables.EncodeTable64RowMajor), Base58BitcoinTables.EncodeTable64RowMajor),
-            (nameof(Base58BitcoinTables.DecodeTable32), Base58BitcoinTables.DecodeTable32),
-            (nameof(Base58BitcoinTables.DecodeTable64), Base58BitcoinTables.DecodeTable64),
+            (nameof(Base58BitcoinTables.EncodeTable32RowMajor), Base58BitcoinTables.EncodeTable32RowMajor.ToArray()),
+            (nameof(Base58BitcoinTables.EncodeTable64RowMajor), Base58BitcoinTables.EncodeTable64RowMajor.ToArray()),
+            (nameof(Base58BitcoinTables.DecodeTable32), Base58BitcoinTables.DecodeTable32.ToArray()),
+            (nameof(Base58BitcoinTables.DecodeTable64), Base58BitcoinTables.DecodeTable64.ToArray()),
         })
         {
             for (int i = 0; i < table.Length; i++)

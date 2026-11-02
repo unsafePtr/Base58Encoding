@@ -41,19 +41,20 @@ public class EndToEndEncodeBenchmark
         _data = new byte[Size];
         rng.NextBytes(_data);
 
-        // Scalar arm reads the production jagged tables directly; the vectorized arms read each
-        // encode row laid out contiguously as ulong. Row length is IntermediateSz - 1 (the matmul
-        // only touches columns 0..IntermediateSz-2, accumulating into intermediate[1..]).
-        _jagged = Size == 32 ? Base58BitcoinTables.EncodeTable32 : Base58BitcoinTables.EncodeTable64;
+        // The vectorized arms read the production row-major table, and the scalar arm a jagged copy of it.
+        // Row length is IntermediateSz - 1, because the matmul only touches columns 0..IntermediateSz-2.
+        // It accumulates into intermediate[1..].
         int binarySz = Size == 32 ? Base58BitcoinTables.BinarySz32 : Base58BitcoinTables.BinarySz64;
         int rowLen = (Size == 32 ? Base58BitcoinTables.IntermediateSz32 : Base58BitcoinTables.IntermediateSz64) - 1;
 
-        _rowMajor = new ulong[binarySz * rowLen];
+        _rowMajor = (Size == 32 ? Base58BitcoinTables.EncodeTable32RowMajor : Base58BitcoinTables.EncodeTable64RowMajor).ToArray();
+        _jagged = new uint[binarySz][];
         for (int i = 0; i < binarySz; i++)
         {
+            _jagged[i] = new uint[rowLen];
             for (int j = 0; j < rowLen; j++)
             {
-                _rowMajor[i * rowLen + j] = _jagged[i][j];
+                _jagged[i][j] = (uint)_rowMajor[i * rowLen + j];
             }
         }
 

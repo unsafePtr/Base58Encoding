@@ -15,12 +15,12 @@ public class JaggedVsMultidimensionalArrayBenchmark
     private byte[] _data = default!;
     private string _encodedBase58 = default!;
 
-    // Jagged arrays (current implementation)
-    private static readonly uint[][] JaggedEncodeTable32 = Base58BitcoinTables.EncodeTable32;
+    // Jagged arrays
+    private static readonly uint[][] JaggedEncodeTable32 = ToJagged(Base58BitcoinTables.EncodeTable32RowMajor, Base58BitcoinTables.BinarySz32, Base58BitcoinTables.IntermediateSz32 - 1);
     private static readonly uint[][] JaggedDecodeTable32 = UntransposeToJagged(Base58BitcoinTables.DecodeTable32, Base58BitcoinTables.IntermediateSz32, Base58BitcoinTables.BinarySz32);
 
     // Multidimensional arrays (alternative implementation)
-    private static readonly uint[,] MultidimensionalEncodeTable32 = ConvertToMultidimensional(Base58BitcoinTables.EncodeTable32);
+    private static readonly uint[,] MultidimensionalEncodeTable32 = ConvertToMultidimensional(JaggedEncodeTable32);
     private static readonly uint[,] MultidimensionalDecodeTable32 = ConvertToMultidimensional(JaggedDecodeTable32);
 
     private readonly ref struct FastEncodeState
@@ -73,7 +73,7 @@ public class JaggedVsMultidimensionalArrayBenchmark
 
     // Production DecodeTable32 is now transposed column-major ulong; rebuild the original
     // row-major jagged form so this layout comparison keeps compiling.
-    private static uint[][] UntransposeToJagged(ulong[] transposed, int rows, int cols)
+    private static uint[][] UntransposeToJagged(ReadOnlySpan<ulong> transposed, int rows, int cols)
     {
         var jagged = new uint[rows][];
         for (int i = 0; i < rows; i++)
@@ -82,6 +82,22 @@ public class JaggedVsMultidimensionalArrayBenchmark
             for (int j = 0; j < cols; j++)
             {
                 jagged[i][j] = (uint)transposed[j * rows + i];
+            }
+        }
+
+        return jagged;
+    }
+
+    // Production EncodeTable32RowMajor is row-major ulong; split it back into jagged uint rows.
+    private static uint[][] ToJagged(ReadOnlySpan<ulong> rowMajor, int rows, int cols)
+    {
+        var jagged = new uint[rows][];
+        for (int i = 0; i < rows; i++)
+        {
+            jagged[i] = new uint[cols];
+            for (int j = 0; j < cols; j++)
+            {
+                jagged[i][j] = (uint)rowMajor[i * cols + j];
             }
         }
 
