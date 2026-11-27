@@ -16,14 +16,12 @@ A Base58 encoding and decoding library for .NET 10 and .NET 11 with support for 
 The library is reflection-free and marked `IsAotCompatible`, so `PublishAot` and `PublishTrimmed` need no configuration and produce no warnings.
 
 Native AOT fixes the available vector width when the application is published.
-The default x64 baseline is `x86-64-v1` on .NET 10 and `x86-64-v2` on .NET 11.
-Neither includes AVX2, so default publishes use the `Vector128` kernel.
+Our x64 AOT tests use `x86-64-v2` on both frameworks, exercising the `Vector128` kernel.
+This matches [.NET 11's minimum](https://learn.microsoft.com/dotnet/core/compatibility/jit/11/minimum-hardware-requirements).
+The NuGet package contains portable IL; consuming applications choose their own publish baseline.
 Set `<IlcInstructionSet>x86-64-v3</IlcInstructionSet>` to enable `Vector256` on compatible x64 CPUs.
 The published application then requires an `x86-64-v3` CPU.
 ARM64 builds use the `Vector128` kernel.
-
-.NET 11 also raises the Windows/Linux ReadyToRun target to `x86-64-v3`, separately from the Native AOT minimum.
-See [Microsoft's hardware requirements](https://learn.microsoft.com/dotnet/core/compatibility/jit/11/minimum-hardware-requirements).
 
 ## Building and testing
 

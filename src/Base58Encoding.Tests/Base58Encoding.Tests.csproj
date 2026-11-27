@@ -10,6 +10,7 @@
     <PropertyGroup Condition="'$(PublishAot)' == 'true'">
         <TrimmerSingleWarn>false</TrimmerSingleWarn>
         <InvariantGlobalization>true</InvariantGlobalization>
+        <IlcInstructionSet Condition="'$(IlcInstructionSet)' == '' and $(RuntimeIdentifier.EndsWith('-x64'))">x86-64-v2</IlcInstructionSet>
     </PropertyGroup>
 
     <ItemGroup>

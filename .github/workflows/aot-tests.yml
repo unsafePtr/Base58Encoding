@@ -1,6 +1,6 @@
 name: Native AOT tests
 
-# Default AOT publishes exercise Vector128 on both frameworks; x86-64-v3 publishes exercise Vector256.
+# The shared x64 v2 baseline exercises Vector128; x86-64-v3 publishes exercise Vector256.
 
 on:
   push:
@@ -21,7 +21,7 @@ jobs:
       matrix:
         framework: [net10.0, net11.0]
         target:
-          - { runner: ubuntu-24.04,     rid: linux-x64,   instruction-set: '',          vector-width: '128' }
+          - { runner: ubuntu-24.04,     rid: linux-x64,   instruction-set: x86-64-v2,   vector-width: '128' }
           - { runner: ubuntu-24.04,     rid: linux-x64,   instruction-set: x86-64-v3,   vector-width: '256' }
           - { runner: ubuntu-24.04-arm, rid: linux-arm64, instruction-set: '',          vector-width: '128' }
           - { runner: macos-26,         rid: osx-arm64,   instruction-set: '',          vector-width: '128' }
@@ -42,7 +42,7 @@ jobs:
       if: runner.os == 'Linux'
       run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
 
-    # An empty IlcInstructionSet is a no-op, so the default-baseline legs need no special case.
+    # ARM64 retains the runtime's default instruction set.
     - name: Publish (Native AOT)
       shell: bash
       run: |
@@ -74,7 +74,7 @@ jobs:
     # AOT discovery can omit tests that reflection finds. Compare totals, which include skipped tests.
     # Use the last summary because a failing fallback test also prints its child process's summary.
     - name: Discovery parity with the JIT package
-      if: matrix.target.rid == 'linux-x64' && matrix.target.instruction-set == ''
+      if: matrix.target.rid == 'linux-x64' && matrix.target.instruction-set == 'x86-64-v2'
       shell: bash
       run: |
         dotnet run --project src/Base58Encoding.Tests/Base58Encoding.Tests.csproj \
