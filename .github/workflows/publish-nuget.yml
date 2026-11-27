@@ -1,8 +1,6 @@
 name: Build and Publish to NuGet
 
-# Release-only: tags and manual dispatch. Ordinary pushes and PRs are covered by tests.yml and
-# aot-tests.yml, which build the same solution across more platforms -- this one used to duplicate
-# that on every library change while never packing, since Pack is gated on a version being set.
+# Versioned releases must pass both framework suites before the package can be published.
 on:
   push:
     tags:
@@ -37,7 +35,9 @@ jobs:
     - name: Setup .NET
       uses: actions/setup-dotnet@v5
       with:
-        dotnet-version: 10.0.x
+        dotnet-version: |
+          10.0.x
+          11.0.x
         
     - name: Restore dependencies
       run: dotnet restore src/Base58Encoding.slnx
@@ -45,17 +45,26 @@ jobs:
     - name: Build
       run: dotnet build src/Base58Encoding.slnx --configuration Release --no-restore
       
-    # The release path's own gate. tests.yml never runs on a tag -- a branches: filter does not
-    # match refs/tags/* -- so for a tag cut anywhere other than an already-tested master commit,
-    # nothing else has run the suite against this ref. Skipped only for a dispatch with no version,
-    # which builds without packing.
+    # Branch-filtered test workflows do not run for tags, so releases need their own test run.
     - name: Test
       if: env.VERSION != ''
-      run: dotnet test --project src/Base58Encoding.Tests/Base58Encoding.Tests.csproj --configuration Release --no-build --verbosity normal
+      run: |
+        dotnet run --project src/Base58Encoding.Tests/Base58Encoding.Tests.csproj --configuration Release --framework net10.0 --no-build
+        dotnet run --project src/Base58Encoding.Tests/Base58Encoding.Tests.csproj --configuration Release --framework net11.0 --no-build
       
     - name: Pack
       if: env.VERSION != ''
       run: dotnet pack src/Base58Encoding/Base58Encoding.csproj --configuration Release --no-build --output ./artifacts -p:PackageVersion=${{ env.VERSION }}
+
+    - name: Check package targets
+      if: env.VERSION != ''
+      shell: bash
+      run: |
+        package=$(find artifacts -maxdepth 1 -name '*.nupkg' -print -quit)
+        unzip -Z1 "$package" > package-files.txt
+        for framework in net10.0 net11.0; do
+          grep -Fx "lib/$framework/Base58Encoding.dll" package-files.txt
+        done
       
     - name: Upload artifacts
       if: env.VERSION != ''
@@ -83,7 +92,7 @@ jobs:
     - name: Setup .NET
       uses: actions/setup-dotnet@v5
       with:
-        dotnet-version: 10.0.x
+        dotnet-version: 11.0.x
         
     - name: NuGet login (OIDC → temp API key)
       uses: NuGet/login@v1

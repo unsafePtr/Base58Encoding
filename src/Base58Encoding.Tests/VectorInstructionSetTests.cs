@@ -1,28 +1,10 @@
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using System.Runtime.Intrinsics;
 
 namespace Base58Encoding.Tests;
 
-// The 32/64-byte fast paths (and CountLeadingZeros) select a code path from the CPU's available
-// vector instruction sets:
-//   AVX2 present            -> Vector256 branch
-//   AVX2 off, SSE present   -> Vector128 branch
-//   no hardware intrinsics  -> scalar fallback
-//
-// Whether Vector256/Vector128 are "hardware accelerated" is decided by the JIT when a method is
-// compiled, from the instruction sets the runtime enabled at startup -- it cannot be toggled inside
-// a running process. So to prove the Vector128 and scalar paths are correct we launch a CHILD
-// process with an instruction set disabled via an environment variable and run the whole test suite
-// there (Base58EncodeFast / Base58DecodeFast already cover the 32/64 fast paths thoroughly). Knobs
-// (x86/x64):
-//   DOTNET_EnableAVX2=0        disables AVX2 (and AVX-512), leaving SSE  -> forces the Vector128 path
-//   DOTNET_EnableHWIntrinsic=0 disables all hardware intrinsics          -> forces the scalar path
-//
-// Runs by default: these are the only tests covering the Vector128 and scalar paths. ChildMarker is
-// what stops the child spawning its own child.
-//
-// Both knobs are JIT-only: ILC bakes the instruction sets in when it compiles, so a native run
-// skips these and the aot-tests workflow covers the kernels with per-baseline publishes instead.
+// JIT feature switches require a fresh process. Native AOT selects its vector width during publishing.
 public class VectorInstructionSetTests
 {
     private const string ChildMarker = "BASE58_VECTOR_CHILD";
@@ -34,9 +16,21 @@ public class VectorInstructionSetTests
         _output = output;
     }
 
+    [Fact]
+    public void NativeAot_UsesExpectedVectorWidth()
+    {
+        var expectedWidth = Environment.GetEnvironmentVariable("BASE58_EXPECT_VECTOR_WIDTH");
+        Assert.SkipWhen(expectedWidth is null, "no Native AOT baseline selected");
+        Assert.False(RuntimeFeature.IsDynamicCodeSupported);
+
+        var actualWidth = Vector256.IsHardwareAccelerated ? "256" :
+            Vector128.IsHardwareAccelerated ? "128" : "0";
+        Assert.Equal(expectedWidth, actualWidth);
+    }
+
     [Theory]
-    [InlineData("DOTNET_EnableAVX2", "0")]        // disable AVX2 -> forces the Vector128 path
-    [InlineData("DOTNET_EnableHWIntrinsic", "0")] // disable all hardware intrinsics -> forces the scalar path
+    [InlineData("DOTNET_EnableAVX2", "0")]
+    [InlineData("DOTNET_EnableHWIntrinsic", "0")]
     public void AllTests_Pass_WithVectorInstructionSetDisabled(string environmentVariable, string value)
     {
         Assert.SkipWhen(Environment.GetEnvironmentVariable(ChildMarker) == "1", "already the child run");
@@ -49,7 +43,12 @@ public class VectorInstructionSetTests
 #else
         const string configuration = "Release";
 #endif
-        string testProjectDir = Path.Combine(FindSrcDir(), "Base58Encoding.Tests");
+#if NET11_0_OR_GREATER
+        const string targetFramework = "net11.0";
+#else
+        const string targetFramework = "net10.0";
+#endif
+        var testProjectDir = Path.Combine(FindSrcDir(), "Base58Encoding.Tests");
 
         var startInfo = new ProcessStartInfo
         {
@@ -63,14 +62,16 @@ public class VectorInstructionSetTests
         startInfo.ArgumentList.Add("run");
         startInfo.ArgumentList.Add("-c");
         startInfo.ArgumentList.Add(configuration);
+        startInfo.ArgumentList.Add("--framework");
+        startInfo.ArgumentList.Add(targetFramework);
         startInfo.ArgumentList.Add("--no-build");
         startInfo.ArgumentList.Add("--no-restore");
         startInfo.Environment[environmentVariable] = value;
         startInfo.Environment[ChildMarker] = "1";
 
         using var process = Process.Start(startInfo)!;
-        string stdout = process.StandardOutput.ReadToEnd();
-        string stderr = process.StandardError.ReadToEnd();
+        var stdout = process.StandardOutput.ReadToEnd();
+        var stderr = process.StandardError.ReadToEnd();
         process.WaitForExit();
 
         _output.WriteLine($"child with {environmentVariable}={value}:");
