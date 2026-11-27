@@ -1,6 +1,6 @@
 # Base58 Encoding Library
 
-A .NET 10.0 Base58 encoding and decoding library with support for multiple alphabet variants.
+A Base58 encoding and decoding library for .NET 10 and .NET 11 with support for multiple alphabet variants.
 
 ## Features
 
@@ -15,7 +15,29 @@ A .NET 10.0 Base58 encoding and decoding library with support for multiple alpha
 
 The library is reflection-free and marked `IsAotCompatible`, so `PublishAot` and `PublishTrimmed` need no configuration and produce no warnings.
 
-Note that `Vector256` is not used under Native AOT: ILC resolves `Vector256.IsHardwareAccelerated` at build time against a baseline that excludes AVX2, so AOT builds run the `Vector128` kernel. Setting `<IlcInstructionSet>x86-64-v3</IlcInstructionSet>` restores it, at the cost of making AVX2 a hard startup requirement.
+Native AOT fixes the available vector width when the application is published.
+The default x64 baseline is `x86-64-v1` on .NET 10 and `x86-64-v2` on .NET 11.
+Neither includes AVX2, so default publishes use the `Vector128` kernel.
+Set `<IlcInstructionSet>x86-64-v3</IlcInstructionSet>` to enable `Vector256` on compatible x64 CPUs.
+The published application then requires an `x86-64-v3` CPU.
+ARM64 builds use the `Vector128` kernel.
+
+.NET 11 also raises the Windows/Linux ReadyToRun target to `x86-64-v3`, separately from the Native AOT minimum.
+See [Microsoft's hardware requirements](https://learn.microsoft.com/dotnet/core/compatibility/jit/11/minimum-hardware-requirements).
+
+## Building and testing
+
+Install the .NET 11 SDK and the .NET 10 runtime to build and test both targets.
+The NuGet package contains separate `net10.0` and `net11.0` assemblies.
+
+```sh
+dotnet restore src/Base58Encoding.slnx
+dotnet build src/Base58Encoding.slnx -c Release --no-restore
+dotnet run --project src/Base58Encoding.Tests -c Release -f net10.0 --no-build
+dotnet run --project src/Base58Encoding.Tests -c Release -f net11.0 --no-build
+```
+
+Specify `-f net10.0` or `-f net11.0` when running benchmarks or publishing a Native AOT application.
 
 ## Usage
 
